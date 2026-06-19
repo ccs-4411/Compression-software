@@ -124,7 +124,8 @@
             font-weight: bold;
             font-size: 14px;
         }
-        .init-loading { background: rgba(59, 130, 246, 0.15); border: 1px solid #3b82f6; color: #93c5fd; }
+        .init-idle { background: rgba(148, 163, 184, 0.1); border: 1px solid #475569; color: #94a3b8; }
+        .init-loading { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fcd34d; }
         .init-ready { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981; }
     </style>
 </head>
@@ -132,10 +133,10 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.15 本地自託管純淨版</div>
+    <div class="subtitle">⚡ 核心版本：0.12.15 雲端晶片隨攜版</div>
     
-    <div class="init-status init-loading" id="initStatus">
-        ⚙️ 正在自 Railway 本地磁區掛載獨立安全核心...
+    <div class="init-status init-idle" id="initStatus">
+        💡 提示：核心尚未載入，將在點擊壓縮時自動對接。
     </div>
     
     <div class="form-group">
@@ -161,7 +162,7 @@
         </select>
     </div>
 
-    <button class="btn-start" id="btnStart" disabled>等待核心就緒...</button>
+    <button class="btn-start" id="btnStart" disabled>請先選取影片檔案</button>
     
     <div id="status"></div>
     <div class="progress-bar" id="progressBar">
@@ -171,10 +172,10 @@
     <div id="log"></div>
 </div>
 
-<script src="./ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.min.js"></script>
 
 <script>
-    let ffmpeg;
+    let ffmpeg = null;
     let ffmpegReady = false;
 
     let dirHandle = null;
@@ -202,12 +203,18 @@
         statusDiv.textContent = message;
     }
 
-    async function initFFmpeg() {
+    // 🎯 核心啟動函式：移到這裡，只有在點擊按鈕時才會被觸發
+    async function ensureFFmpegReady() {
+        if (ffmpegReady && ffmpeg) return true; // 已經加載過就不用重抓
+
+        initStatus.className = 'init-status init-loading';
+        initStatus.innerHTML = '⚙️ 正在即時下載並掛載 31MB 全球通用安全核心... (僅首次需下載)';
+        addLog('正從 CDN 管道拉取 FFmpeg WASM 晶片...');
+
         try {
             let FFmpegModule = window.FFmpegWASM || window.FFmpeg;
-            
             if (!FFmpegModule || !FFmpegModule.FFmpeg) {
-                throw new Error('無法從 ffmpeg.min.js 提取全域 FFmpeg 類別。請確認該檔案已正確下載並部署。');
+                throw new Error('找不到 FFmpeg 模組，請確認網路連線是否正常。');
             }
             
             const FFmpegClass = FFmpegModule.FFmpeg;
@@ -225,7 +232,7 @@
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            // 🎯 【終極破局】不再讀取損壞的本地 2b 檔案，直接指向官方高速安全 CDN 晶片通道！
+            // 🎯 【動態下載】只有此時才會真正發起 31MB 的下載請求
             await ffmpeg.load({
                 corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
                 wasmPath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
@@ -233,22 +240,15 @@
             
             ffmpegReady = true;
             initStatus.className = 'init-status init-ready';
-            initStatus.innerHTML = '✅ 本地託管核心已順利啟動！';
-            btnStart.innerText = '開始壓縮並寫入資料夾';
-            addLog('FFmpeg 安全核心掛載成功 ✓');
-            
-            setTimeout(() => { initStatus.style.display = 'none'; }, 3000);
+            initStatus.innerHTML = '✅ 安全核心掛載成功！';
+            addLog('FFmpeg 核心初始化完畢 ✓');
+            return true;
         } catch (err) {
             initStatus.className = 'init-status status-error';
-            initStatus.innerHTML = `❌ 核心掛載失敗: ${err.message}<br><small>請按 F12 打開主控台 (Console) 查看詳細錯誤</small>`;
+            initStatus.innerHTML = `❌ 核心掛載失敗: ${err.message}`;
             addLog(`初始化失敗: ${err.message}`, true);
+            return false;
         }
-    }
-
-    if (document.readyState === 'complete') {
-        initFFmpeg();
-    } else {
-        window.addEventListener('load', initFFmpeg);
     }
 
     // 1. 本地目錄直接讀取
@@ -278,21 +278,37 @@
 
             if (fileHandles.size > 0) {
                 fileSelect.disabled = false;
-                if (ffmpegReady) btnStart.disabled = false;
+                btnStart.disabled = false; // 💡 只要有檔案，按鈕就直接亮起
+                btnStart.innerText = '開始壓縮並寫入資料夾';
                 updateStatus(`📁 成功對接，目錄下發現 ${fileHandles.size} 個支援的 MP4 檔案`, 'success');
             } else {
                 updateStatus('⚠️ 該目錄下沒有找到標準 MP4 影片檔案', 'error');
                 btnStart.disabled = true;
+                btnStart.innerText = '請先選取影片檔案';
             }
         } catch (err) {
             if (err.name !== 'AbortError') updateStatus(`對接資料夾失敗: ${err.message}`, 'error');
         }
     });
 
-    // 2. 核心轉碼
+    // 2. 點擊按鈕：先檢查並加載核心，再執行轉碼
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
-        if (!fileName || !ffmpegReady) return;
+        if (!fileName) return;
+
+        btnStart.disabled = true;
+        btnDir.disabled = true;
+        fileSelect.disabled = true;
+
+        // 🎯 關鍵攔截點：在這裡才去抓 31MB 的核心檔案
+        const isReady = await ensureFFmpegReady();
+        if (!isReady) {
+            // 如果加載核心失敗，把按鈕還給使用者重新試
+            btnStart.disabled = false;
+            btnDir.disabled = false;
+            fileSelect.disabled = false;
+            return;
+        }
 
         const targetHeight = parseInt(resolutionSelect.value);
         let targetWidth = 854; 
@@ -300,9 +316,6 @@
         if (targetHeight === 540) targetWidth = 960;
         if (targetHeight === 720) targetWidth = 1280;
 
-        btnStart.disabled = true;
-        btnDir.disabled = true;
-        fileSelect.disabled = true;
         progressBar.style.display = 'block';
         progressFill.style.width = '0%';
 
