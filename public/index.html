@@ -133,7 +133,7 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.11.0 內存優化穩定版</div>
+    <div class="subtitle">⚡ 核心版本：0.11.0 502防禦相容版</div>
     
     <div class="init-status init-idle" id="initStatus">
         💡 提示：核心模組就緒，點擊壓縮時將透過沙盒載入核心。
@@ -172,7 +172,7 @@
     <div id="log"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.11.0/ffmpeg.min.js" integrity="sha512-Is8S8ThYI7id9w6G6y24z0u8f/pZlY8CdBm4fMvO4P7at1pSvn96YvAsas8UolNclnZgZbslS08DshU1CnbBcg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
 <script>
     let ffmpeg = null;
@@ -209,18 +209,20 @@
 
         initStatus.className = 'init-status init-loading';
         initStatus.innerHTML = '⚙️ 正在即時下載並掛載 31MB 全球通用安全核心... (僅首次需下載)';
-        addLog('正從 jsDelivr CDN 安全管道拉取核心晶片...');
+        addLog('正從 CDN 安全管道拉取核心晶片...');
 
         try {
+            // 🎯【防禦修正二】如果 CDN 載入失敗，這裡進行安全報錯，絕對不綁架其他按鈕
             if (!window.FFmpeg) {
-                throw new Error('找不到 window.FFmpeg 模組，請確認網路是否被阻擋。');
+                throw new Error('CDN 管道發生 502 異常，請稍後再試，或嘗試更換網路環境（例如手機熱點）。');
             }
             
             const { createFFmpeg } = window.FFmpeg;
             
+            // 換用 cdnjs 對應的穩定 corePath
             ffmpeg = createFFmpeg({ 
                 log: true,
-                corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+                corePath: 'https://cdnjs.cloudflare.com/ajax/libs/ffmpeg-core/0.11.0/ffmpeg-core.js'
             });
 
             ffmpeg.setProgress(({ ratio }) => {
@@ -245,7 +247,7 @@
         }
     }
 
-    // 🎯【獨立抽取：安全刷新邏輯】
+    // 🎯【安全刷新邏輯】
     async function refreshFilesSilently() {
         if (!dirHandle) return;
         try {
@@ -281,7 +283,7 @@
         }
     }
 
-    // 1. 初次對接資料夾（合法點擊手勢）
+    // 1. 初次對接資料夾（現在完全獨立，就算外部網路 502 抽風，這個選取功能也保證可用！）
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -330,6 +332,10 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
+            // 🎯【安全防禦修正三】確保從安全的 window.FFmpeg 提取 fetchFile
+            if (!window.FFmpeg || !window.FFmpeg.fetchFile) {
+                throw new Error('FFmpeg 輔助函式未就緒，請重新整理網頁。');
+            }
             const { fetchFile } = window.FFmpeg;
             const videoData = await fetchFile(file);
             
@@ -341,21 +347,18 @@
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
-            // 🎯【相容性安全參數配置】
-            // 移除了 -threads，改為 ultrafast 與 crf 28，最大程度防止 WASM 內存溢出吐出 0 字节。
             await ffmpeg.run(
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast',      
-                '-crf', '28',                
+                '-crf', '26',                
                 '-c:a', 'copy',              
                 'output_compressed.mp4'
             );
 
             addLog('影片壓縮重編碼結束，正在檢查並同步至原本地資料夾...');
             
-            // 讀取虛擬成品
             let resultData;
             try {
                 resultData = ffmpeg.FS('readFile', 'output_compressed.mp4');
@@ -381,5 +384,17 @@
             ffmpeg.FS('unlink', 'output_compressed.mp4');
 
         } catch (err) {
-            updateStatus(`❌
+            updateStatus(`❌ 轉碼終止: ${err.message}`, 'error');
+            addLog(`錯誤報告: ${err.message}`, true);
+        } finally {
+            btnStart.disabled = false;
+            btnDir.disabled = false;
+            fileSelect.disabled = false;
+            btnStart.innerText = '開始壓縮並寫入資料夾';
+            await refreshFilesSilently(); 
+        }
+    });
+</script>
+
+</body>
 </html>
