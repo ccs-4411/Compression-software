@@ -1,12 +1,13 @@
 const express = require('express');
 const path = require('path');
-const mime = require('mime');
 const app = express();
 
-// 🛠️ 1. 強制規定 Railway 遇到 .wasm 檔案時，必須吐出標準的 WebAssembly 標頭
-mime.define({ 'application/wasm': ['wasm'] });
+// 🛠️ 1. 改用 Express 原生字典定義（100% 不崩潰、免安裝 mime 套件）
+if (express.static.mime && express.static.mime.types) {
+    express.static.mime.types['wasm'] = 'application/wasm';
+}
 
-// 🛠️ 2. 確保多執行緒隔離環境安全標頭（FFmpeg 必備，如果原本就有請保留）
+// 🛠️ 2. 確保多執行緒隔離環境安全標頭（FFmpeg 必備）
 app.use((req, res, next) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
