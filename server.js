@@ -19,8 +19,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
 }));
 
-// 3. 其餘的 app.listen 保持原樣（使用 Railway 提供的 8080 或任何 Port）
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+// ...前面的設定都一樣...
+
+// 其餘的 app.listen 或路由保持原樣...
+const PORT = process.env.PORT || 8080; // 👈 確保預設對準 Railway 的 8080 埠
+app.listen(PORT, '0.0.0.0', () => {   // 👈 關鍵！加上了 '0.0.0.0' 允許外部網路連入
     console.log(`伺服器正運行在 port ${PORT}`);
 });
