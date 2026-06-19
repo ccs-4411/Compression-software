@@ -225,17 +225,17 @@
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            // 🎯 【關鍵修正】明確指引 corePath 與 wasmPath 路徑，阻止它去抓錯誤的 .js 檔
+            // 🎯 【終極破局】不再讀取損壞的本地 2b 檔案，直接指向官方高速安全 CDN 晶片通道！
             await ffmpeg.load({
-                corePath: './ffmpeg.min.js',
-                wasmPath: './814.ffmpeg.wasm'
+                corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+                wasmPath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
             });
             
             ffmpegReady = true;
             initStatus.className = 'init-status init-ready';
             initStatus.innerHTML = '✅ 本地託管核心已順利啟動！';
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            addLog('FFmpeg 本地安全核心載入成功 ✓');
+            addLog('FFmpeg 安全核心掛載成功 ✓');
             
             setTimeout(() => { initStatus.style.display = 'none'; }, 3000);
         } catch (err) {
