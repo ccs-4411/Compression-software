@@ -132,7 +132,7 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.10 大檔案防崩潰優化版</div>
+    <div class="subtitle">⚡ 核心版本：0.12.10 大檔案穩定優化版</div>
     
     <div class="init-status init-loading" id="initStatus">
         ⚙️ 正在自 Railway 隔離區載入多執行緒轉碼核心...
@@ -171,10 +171,11 @@
     <div id="log"></div>
 </div>
 
-<script async src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js"></script>
 
 <script>
-    const { FFmpeg, fetchFile } = FFmpeg;
+    // 關鍵修正：宣告全域變數，但不立刻從未載入完畢的物件中提取屬性
+    let FFmpegClass, fetchFile;
     let ffmpeg;
     let ffmpegReady = false;
 
@@ -206,9 +207,18 @@
     // 採用 0.12.x 標準初始化機制
     async function initFFmpeg() {
         try {
-            ffmpeg = new FFmpeg.FFmpeg();
+            // 安全防線：確保 window.FFmpeg 存在才繼續執行
+            if (!window.FFmpeg) {
+                throw new Error('找不到全域 FFmpeg 物件，請檢查網路 CDN 阻擋狀態');
+            }
             
-            // 監聽 FFmpeg 底層 Log，方便即時排查
+            // 安全解構提取
+            FFmpegClass = window.FFmpeg.FFmpeg;
+            fetchFile = window.FFmpeg.fetchFile;
+            
+            ffmpeg = new FFmpegClass();
+            
+            // 監聽 FFmpeg 底層轉碼日誌
             ffmpeg.on('log', ({ message }) => {
                 if (message.includes('Error') || message.includes('Failed')) {
                     console.warn('FFmpeg核心提示:', message);
@@ -238,8 +248,12 @@
         }
     }
 
-    // 自動偵測加載
-    if (window.FFmpeg) { initFFmpeg(); } else { window.addEventListener('load', initFFmpeg); }
+    // 🌐 確保 DOM 和 CDN 腳本完全載入後才執行初始化，防範 Cannot access 錯誤
+    if (document.readyState === 'complete') {
+        initFFmpeg();
+    } else {
+        window.addEventListener('load', initFFmpeg);
+    }
 
     // 1. 本地目錄直接讀取，完全不需要上傳瀏覽器
     btnDir.addEventListener('click', async () => {
@@ -358,8 +372,9 @@
             btnDir.disabled = false;
             fileSelect.disabled = false;
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            // 點擊原資料夾按鈕自動重新整理檔案清單，把剛生成的 AI_ 影片過濾掉
-            btnDir.click(); 
+            
+            // 自動重整檔案清單，把剛生成的 AI_ 影片過濾掉
+            try { btnDir.click(); } catch(e){}
         }
     });
 </script>
