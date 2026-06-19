@@ -133,7 +133,7 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.11.0 虛擬沙盒穿透版</div>
+    <div class="subtitle">⚡ 核心版本：0.11.0 內存優化穩定版</div>
     
     <div class="init-status init-idle" id="initStatus">
         💡 提示：核心模組就緒，點擊壓縮時將透過沙盒載入核心。
@@ -245,7 +245,7 @@
         }
     }
 
-    // 🎯【獨立抽取：安全刷新邏輯】不需要點擊手勢，直接背景重讀資料夾控制權
+    // 🎯【獨立抽取：安全刷新邏輯】
     async function refreshFilesSilently() {
         if (!dirHandle) return;
         try {
@@ -281,7 +281,7 @@
         }
     }
 
-    // 1. 使用者親手點擊：初次對接資料夾（此處有手勢，完全合法）
+    // 1. 初次對接資料夾（合法點擊手勢）
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -335,31 +335,39 @@
             
             ffmpeg.FS('writeFile', 'input_large.mp4', videoData);
             
-            addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
+            addLog('檔案就緒，開始配置內存安全渲染參數...');
             updateStatus('🎬 影片壓縮編碼已啟動...');
 
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
+            // 🎯【相容性安全參數配置】
+            // 移除了 -threads，改為 ultrafast 與 crf 28，最大程度防止 WASM 內存溢出吐出 0 字节。
             await ffmpeg.run(
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
                 '-c:v', 'libx264',
-                '-preset', 'superfast',      
-                '-crf', '26',                
-                '-threads', '4',             
+                '-preset', 'ultrafast',      
+                '-crf', '28',                
                 '-c:a', 'copy',              
                 'output_compressed.mp4'
             );
 
-            addLog('影片壓縮重編碼順利完成！正在同步至原本地資料夾...');
-            updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
-
-            const resultData = ffmpeg.FS('readFile', 'output_compressed.mp4');
+            addLog('影片壓縮重編碼結束，正在檢查並同步至原本地資料夾...');
+            
+            // 讀取虛擬成品
+            let resultData;
+            try {
+                resultData = ffmpeg.FS('readFile', 'output_compressed.mp4');
+            } catch (fsErr) {
+                throw new Error('核心未成功生成檔案，可能因瀏覽器記憶體不足被系統強制終止。');
+            }
             
             if (!resultData || resultData.length === 0) {
-                throw new Error('壓縮異常，核心輸出了 0 字节檔案');
+                throw new Error('壓縮異常，核心輸出了 0 字节檔案。建議縮短影片長度或降低解析度再試。');
             }
+
+            updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
 
             const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
@@ -373,18 +381,5 @@
             ffmpeg.FS('unlink', 'output_compressed.mp4');
 
         } catch (err) {
-            updateStatus(`❌ 轉碼終止: ${err.message}`, 'error');
-            addLog(`錯誤報告: ${err.message}`, true);
-        } finally {
-            btnStart.disabled = false;
-            btnDir.disabled = false;
-            fileSelect.disabled = false;
-            btnStart.innerText = '開始壓縮並寫入資料夾';
-            // 🎯【核心修正】移除偽造點擊，改用無感背景自動刷新，完美避開瀏覽器禁令！
-            await refreshFilesSilently(); 
-        }
-    });
-</script>
-
-</body>
+            updateStatus(`❌
 </html>
