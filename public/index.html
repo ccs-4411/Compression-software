@@ -128,18 +128,15 @@
         .init-loading { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fcd34d; }
         .init-ready { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981; }
     </style>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/umd/index.min.js"></script>
 </head>
 <body>
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.15 雲端防護版</div>
+    <div class="subtitle">⚡ 核心版本：0.11.0 虛擬沙盒穿透版</div>
     
     <div class="init-status init-idle" id="initStatus">
-        💡 提示：核心模組已就緒，將在點擊壓縮時正式啟用 31MB 轉碼晶片。
+        💡 提示：核心模組就緒，點擊壓縮時將透過沙盒載入核心。
     </div>
     
     <div class="form-group">
@@ -175,6 +172,8 @@
     <div id="log"></div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
+
 <script>
     let ffmpeg = null;
     let ffmpegReady = false;
@@ -204,44 +203,38 @@
         statusDiv.textContent = message;
     }
 
-    // 🎯【關鍵修正二】安全、多元的物件相容提取法
+    // 🎯【核心突破口】點擊時才動態載入核心，且完全免疫跨網域 Worker 限制
     async function ensureFFmpegReady() {
         if (ffmpegReady && ffmpeg) return true; 
 
         initStatus.className = 'init-status init-loading';
         initStatus.innerHTML = '⚙️ 正在即時下載並掛載 31MB 全球通用安全核心... (僅首次需下載)';
-        addLog('正從 jsDelivr CDN 管道拉取 FFmpeg WASM 晶片...');
+        addLog('正從 jsDelivr CDN 安全管道拉取核心晶片...');
 
         try {
-            // 雙向阻斷排查法：嘗試所有可能的 CDN 命名空間變體
-            let FFmpegLib = window.FFmpeg;
-            if (!FFmpegLib && window.FFmpegWASM) FFmpegLib = window.FFmpegWASM;
-            
-            if (!FFmpegLib || (!FFmpegLib.FFmpeg && typeof FFmpegLib !== 'function')) {
-                throw new Error('瀏覽器阻擋了 CDN 變體宣告。請嘗試按 F12 開啟快取停用後重試。');
+            // 0.11.0 版本的全域提取類別是 window.FFmpeg
+            if (!window.FFmpeg) {
+                throw new Error('找不到 window.FFmpeg 模組，請確認網路是否被阻擋。');
             }
             
-            // 建立實例
-            const FFmpegClass = FFmpegLib.FFmpeg || FFmpegLib;
-            ffmpeg = new FFmpegClass();
+            const { createFFmpeg } = window.FFmpeg;
             
-            ffmpeg.on('log', ({ message }) => {
-                if (message.includes('Error') || message.includes('Failed')) {
-                    console.warn('FFmpeg核心提示:', message);
-                }
+            // 🎯 這裡加上 log: true 可以在 Console 看到細節
+            ffmpeg = createFFmpeg({ 
+                log: true,
+                corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
             });
 
-            ffmpeg.on('progress', ({ progress }) => {
-                const percent = Math.round(progress * 100);
-                progressFill.style.width = percent + '%';
-                updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
+            ffmpeg.setProgress(({ ratio }) => {
+                const percent = Math.round(ratio * 100);
+                // 處理可能超過 100 或負數的極端狀況
+                const safePercent = Math.max(0, Math.min(100, percent));
+                progressFill.style.width = safePercent + '%';
+                updateStatus(`🎬 影片壓縮中... ${safePercent}%`, 'info');
             });
 
-            // 🎯【核心晶片延遲載入】點擊時才下載這兩個 31MB 大檔案
-            await ffmpeg.load({
-                corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-                wasmPath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
-            });
+            // 🎯 正式載入 31MB 核心，此版核心架構在載入時會自動穿透沙盒限制
+            await ffmpeg.load();
             
             ffmpegReady = true;
             initStatus.className = 'init-status init-ready';
@@ -329,13 +322,12 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            // 提取 fetchFile 工具方法
-            let fetchFileMethod = window.FFmpegUtils ? window.FFmpegUtils.fetchFile : null;
-            if (!fetchFileMethod && window.FFmpeg && window.FFmpeg.fetchFile) fetchFileMethod = window.FFmpeg.fetchFile;
-            if (!fetchFileMethod) throw new Error('無法取得 fetchFile 輔助函式，轉碼終止。');
-
-            const videoData = await fetchFileMethod(file);
-            await ffmpeg.writeFile('input_large.mp4', videoData);
+            // 0.11.0 版本的內建高效 fetchFile 讀取工具
+            const { fetchFile } = window.FFmpeg;
+            const videoData = await fetchFile(file);
+            
+            // 寫入虛擬文件系統 (0.11.0 版語法為 FS('writeFile', ...))
+            ffmpeg.FS('writeFile', 'input_large.mp4', videoData);
             
             addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
             updateStatus('🎬 影片壓縮編碼已啟動...');
@@ -343,7 +335,8 @@
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
-            const args = [
+            // 執行 FFmpeg 指令 (0.11.0 版語法為 ffmpeg.run(...))
+            await ffmpeg.run(
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
                 '-c:v', 'libx264',
@@ -352,13 +345,13 @@
                 '-threads', '4',             
                 '-c:a', 'copy',              
                 'output_compressed.mp4'
-            ];
+            );
 
-            await ffmpeg.exec(args);
             addLog('影片壓縮重編碼順利完成！正在同步至原本地資料夾...');
             updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
 
-            const resultData = await ffmpeg.readFile('output_compressed.mp4');
+            // 讀取虛擬文件系統成品
+            const resultData = ffmpeg.FS('readFile', 'output_compressed.mp4');
             
             if (!resultData || resultData.length === 0) {
                 throw new Error('壓縮異常，核心輸出了 0 字节檔案');
@@ -372,8 +365,9 @@
             updateStatus(`🎉 成功！檔案已存至原資料夾：${outName}`, 'success');
             addLog(`大檔案無損壓縮成功 -> 生成 ${outName}`);
 
-            await ffmpeg.deleteFile('input_large.mp4');
-            await ffmpeg.deleteFile('output_compressed.mp4');
+            // 釋放內存
+            ffmpeg.FS('unlink', 'input_large.mp4');
+            ffmpeg.FS('unlink', 'output_compressed.mp4');
 
         } catch (err) {
             updateStatus(`❌ 轉碼終止: ${err.message}`, 'error');
