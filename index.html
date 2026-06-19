@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎬 AI 影片本地壓縮工具 - 黑框大檔案優化版</title>
+    <title>🎬 AI 影片本地壓縮工具 - 本地核心穩定版</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -132,10 +132,10 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.10 大檔案穩定優化版</div>
+    <div class="subtitle">⚡ 核心版本：0.12.10 自託管本地安全版</div>
     
     <div class="init-status init-loading" id="initStatus">
-        ⚙️ 正在自 Railway 隔離區載入多執行緒轉碼核心...
+        ⚙️ 正在自 Railway 本地磁區掛載獨立安全核心...
     </div>
     
     <div class="form-group">
@@ -171,10 +171,9 @@
     <div id="log"></div>
 </div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js"></script>
+<script src="./ffmpeg.min.js"></script>
 
 <script>
-    // 關鍵修正：宣告全域變數，但不立刻從未載入完畢的物件中提取屬性
     let FFmpegClass, fetchFile;
     let ffmpeg;
     let ffmpegReady = false;
@@ -204,58 +203,56 @@
         statusDiv.textContent = message;
     }
 
-    // 採用 0.12.x 標準初始化機制
+    // 採用 0.12.x 本地對接機制
     async function initFFmpeg() {
         try {
-            // 安全防線：確保 window.FFmpeg 存在才繼續執行
             if (!window.FFmpeg) {
-                throw new Error('找不到全域 FFmpeg 物件，請檢查網路 CDN 阻擋狀態');
+                throw new Error('找不到本地全域 FFmpeg 物件，請檢查伺服器端靜態資源是否配置妥當');
             }
             
-            // 安全解構提取
             FFmpegClass = window.FFmpeg.FFmpeg;
             fetchFile = window.FFmpeg.fetchFile;
             
             ffmpeg = new FFmpegClass();
             
-            // 監聽 FFmpeg 底層轉碼日誌
             ffmpeg.on('log', ({ message }) => {
                 if (message.includes('Error') || message.includes('Failed')) {
                     console.warn('FFmpeg核心提示:', message);
                 }
             });
 
-            // 監聽轉碼百分比進度
             ffmpeg.on('progress', ({ progress }) => {
                 const percent = Math.round(progress * 100);
                 progressFill.style.width = percent + '%';
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            await ffmpeg.load();
+            // 🛠️ 核心修正：指定多執行緒 worker 抓取同目錄下的本地 814.ffmpeg.min.js，絕不走外網
+            await ffmpeg.load({
+                classWorkerURL: './814.ffmpeg.min.js'
+            });
             
             ffmpegReady = true;
             initStatus.className = 'init-status init-ready';
-            initStatus.innerHTML = '✅ 多執行緒安全防護核心已成功掛載！';
+            initStatus.innerHTML = '✅ 本地自託管隔離核心已成功掛載！';
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            addLog('FFmpeg 0.12.10 核心初始化成功 ✓');
+            addLog('FFmpeg 本地獨立核心載入成功 ✓');
             
             setTimeout(() => { initStatus.style.display = 'none'; }, 3000);
         } catch (err) {
             initStatus.className = 'init-status status-error';
-            initStatus.innerHTML = `❌ 核心掛載失敗: ${err.message}`;
+            initStatus.innerHTML = `❌ 本地核心掛載失敗: ${err.message}<br><small>請確認 814.ffmpeg.min.js 是否已放在相同專案路徑下</small>`;
             addLog(`初始化失敗: ${err.message}`, true);
         }
     }
 
-    // 🌐 確保 DOM 和 CDN 腳本完全載入後才執行初始化，防範 Cannot access 錯誤
     if (document.readyState === 'complete') {
         initFFmpeg();
     } else {
         window.addEventListener('load', initFFmpeg);
     }
 
-    // 1. 本地目錄直接讀取，完全不需要上傳瀏覽器
+    // 1. 本地目錄直接讀取
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -268,7 +265,7 @@
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
                     const lowerName = entry.name.toLowerCase();
-                    if (entry.name.startsWith('AI_')) continue; // 跳過已經壓過的
+                    if (entry.name.startsWith('AI_')) continue; 
                     
                     if (lowerName.endsWith('.mp4')) {
                         fileHandles.set(entry.name, entry);
@@ -293,13 +290,13 @@
         }
     });
 
-    // 2. 核心轉碼：讀取、置中加黑框、防爆寫回
+    // 2. 核心轉碼
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
         if (!fileName || !ffmpegReady) return;
 
         const targetHeight = parseInt(resolutionSelect.value);
-        let targetWidth = 854; // 預設 480p 寬度
+        let targetWidth = 854; 
         if (targetHeight === 360) targetWidth = 640;
         if (targetHeight === 540) targetWidth = 960;
         if (targetHeight === 720) targetWidth = 1280;
@@ -317,26 +314,23 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            // 使用 0.12.x 穩定的大檔案寫入模式
             const videoData = await fetchFile(file);
             await ffmpeg.writeFile('input_large.mp4', videoData);
             
             addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
             updateStatus('🎬 影片壓縮編碼已啟動...');
 
-            // 高級黑框濾鏡：保持原比例縮放，不足 16:9 比例的四周自動填滿黑邊並居中
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
-            // 0.12.x 大檔案優化防崩潰指令參數
             const args = [
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
                 '-c:v', 'libx264',
-                '-preset', 'superfast',      // 平衡速度與高容量壓縮的推薦配置
-                '-crf', '26',                // 優質檔案位元率
-                '-threads', '4',             // 鎖定 4 線程防範 Railway 環境溢位
-                '-c:a', 'copy',              // 音訊直通，極大省去重編碼時間與資源
+                '-preset', 'superfast',      
+                '-crf', '26',                
+                '-threads', '4',             
+                '-c:a', 'copy',              
                 'output_compressed.mp4'
             ];
 
@@ -344,14 +338,12 @@
             addLog('影片壓縮重編碼順利完成！正在同步至原本地資料夾...');
             updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
 
-            // 從核心讀取二進位數據
             const resultData = await ffmpeg.readFile('output_compressed.mp4');
             
             if (!resultData || resultData.length === 0) {
                 throw new Error('壓縮異常，核心輸出了 0 字节檔案');
             }
 
-            // 完美的 File System Access API 寫回原資料夾，檔名前綴加上 AI_
             const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
             await writable.write(resultData);
@@ -360,7 +352,6 @@
             updateStatus(`🎉 成功！檔案已存至原資料夾：${outName}`, 'success');
             addLog(`大檔案無損壓縮成功 -> 生成 ${outName}`);
 
-            // 徹底清除 WebAssembly 內部暫存，防範連壓多個大檔時爆掉
             await ffmpeg.deleteFile('input_large.mp4');
             await ffmpeg.deleteFile('output_compressed.mp4');
 
@@ -372,8 +363,6 @@
             btnDir.disabled = false;
             fileSelect.disabled = false;
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            
-            // 自動重整檔案清單，把剛生成的 AI_ 影片過濾掉
             try { btnDir.click(); } catch(e){}
         }
     });
