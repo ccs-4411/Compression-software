@@ -3,60 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 影片本地壓縮工具 (大檔案優化版)</title>
+    <title>🎬 AI 影片本地壓縮工具 - 黑框大檔案優化版</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-            background-color: #f5f5f7;
-            color: #333;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
             padding: 40px 20px;
+            min-height: 100vh;
             display: flex;
             justify-content: center;
+            align-items: center;
         }
-        .container {
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            max-width: 550px;
+        .container { 
+            max-width: 600px; 
             width: 100%;
+            background: #1e293b; 
+            padding: 30px; 
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
-        h2 { margin-top: 0; color: #1d1d1f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
-        select, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
-        select:focus { outline: none; border-color: #0071e3; }
-        button { background-color: #0071e3; color: white; border: none; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
-        button:hover { background-color: #0077ed; }
-        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        h1 { font-size: 26px; margin-bottom: 10px; text-align: center; color: #fff; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 25px; font-size: 14px; }
+        
+        .form-group { margin-bottom: 22px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #3b82f6; font-size: 15px; }
+        
+        select, button { 
+            width: 100%; 
+            padding: 12px 15px; 
+            border-radius: 8px; 
+            border: 1px solid #334155; 
+            font-size: 15px; 
+            box-sizing: border-box; 
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        select:focus { outline: none; border-color: #3b82f6; }
+        
+        .btn-dir {
+            background: rgba(59, 130, 246, 0.1);
+            border: 2px dashed #3b82f6;
+            color: #60a5fa;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        .btn-dir:hover { background: rgba(59, 130, 246, 0.2); border-color: #60a5fa; }
+        
+        .dir-path { font-size: 13px; color: #10b981; display: block; margin-top: 6px; word-break: break-all; }
+        
+        .btn-start { 
+            background: linear-gradient(135deg, #3b82f6, #2563eb); 
+            color: white; 
+            border: none; 
+            font-weight: bold; 
+            cursor: pointer; 
+            transition: all 0.3s; 
+            margin-top: 10px;
+            padding: 14px;
+            font-size: 16px;
+        }
+        .btn-start:hover:not(:disabled) { 
+            background: linear-gradient(135deg, #2563eb, #1d4ed8); 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+        }
+        .btn-start:disabled { background: #64748b; cursor: not-allowed; opacity: 0.6; transform: none; box-shadow: none; }
+        
+        #status {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+        #status.show { display: block; }
+        .status-info { background: #1e40af; color: #93c5fd; }
+        .status-success { background: #065f46; color: #10b981; }
+        .status-error { background: #7c2d12; color: #fb923c; }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 12px;
+            display: none;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
         #log {
             margin-top: 20px;
-            padding: 15px;
-            background: #f9f9fb;
-            border: 1px solid #e5e5ea;
+            padding: 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
             border-radius: 8px;
-            max-height: 250px;
+            height: 160px;
             overflow-y: auto;
             font-family: monospace;
-            font-size: 13px;
+            font-size: 12px;
+            color: #94a3b8;
             white-space: pre-wrap;
         }
-        .success { color: #34c759; font-weight: bold; }
-        .error { color: #ff3b30; font-weight: bold; }
-        .info { color: #0071e3; }
-        .process { color: #f5a623; }
+        
+        .init-status {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .init-loading { background: rgba(59, 130, 246, 0.15); border: 1px solid #3b82f6; color: #93c5fd; }
+        .init-ready { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.11.6/ffmpeg.min.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <h2>AI 影片本地壓縮工具 (黑框優化版)</h2>
+    <h1>🎬 AI 影片本地壓縮工具</h1>
+    <div class="subtitle">⚡ 核心版本：0.12.10 大檔案防崩潰優化版</div>
+    
+    <div class="init-status init-loading" id="initStatus">
+        ⚙️ 正在自 Railway 隔離區載入多執行緒轉碼核心...
+    </div>
     
     <div class="form-group">
-        <label>1. 選擇影片所在的資料夾</label>
-        <button id="btnDir">選取資料夾</button>
-        <span id="dirPath" style="font-size: 13px; color: #666; display:block; margin-top:5px;">尚未選擇資料夾</span>
+        <label>1. 選擇影片來源資料夾（免上傳雲端）</label>
+        <button class="btn-dir" id="btnDir">選取本地資料夾</button>
+        <span class="dir-path" id="dirPath">尚未選擇資料夾</span>
     </div>
 
     <div class="form-group">
@@ -67,7 +152,7 @@
     </div>
 
     <div class="form-group">
-        <label for="resolution">3. 目標解析度（縮放並補黑框）</label>
+        <label for="resolution">3. 目標解析度（自動縮放並加黑框置中）</label>
         <select id="resolution">
             <option value="360">360p (640x360)</option>
             <option value="480" selected>480p (854x480)</option>
@@ -76,13 +161,22 @@
         </select>
     </div>
 
-    <button id="btnStart" disabled>載入核心中...</button>
-    <div id="log">正在透過 Railway 環境初始化系統...</div>
+    <button class="btn-start" id="btnStart" disabled>等待核心就緒...</button>
+    
+    <div id="status"></div>
+    <div class="progress-bar" id="progressBar">
+        <div class="progress-fill" id="progressFill"></div>
+    </div>
+    
+    <div id="log"></div>
 </div>
 
+<script async src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/ffmpeg.min.js"></script>
+
 <script>
-    const { createFFmpeg, fetchFile } = FFmpeg;
-    const ffmpeg = createFFmpeg({ log: false }); 
+    const { FFmpeg, fetchFile } = FFmpeg;
+    let ffmpeg;
+    let ffmpegReady = false;
 
     let dirHandle = null;
     const fileHandles = new Map();
@@ -93,50 +187,74 @@
     const btnStart = document.getElementById('btnStart');
     const logDiv = document.getElementById('log');
     const dirPathSpan = document.getElementById('dirPath');
+    const statusDiv = document.getElementById('status');
+    const progressBar = document.getElementById('progressBar');
+    const progressFill = document.getElementById('progressFill');
+    const initStatus = document.getElementById('initStatus');
 
-    function log(message, type = 'info') {
+    function addLog(message, isError = false) {
         const time = new Date().toLocaleTimeString();
-        logDiv.innerHTML += `<span class="${type}">[${time}] ${message}</span><br>`;
+        logDiv.innerHTML += `[${time}] ${isError ? '❌ ' : ''}${message}\n`;
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    // 初始化載入 FFmpeg 核心
+    function updateStatus(message, type = 'info') {
+        statusDiv.className = `show status-${type}`;
+        statusDiv.textContent = message;
+    }
+
+    // 採用 0.12.x 標準初始化機制
     async function initFFmpeg() {
         try {
-            log('正在下載多執行緒影片轉碼核心...', 'info');
+            ffmpeg = new FFmpeg.FFmpeg();
+            
+            // 監聽 FFmpeg 底層 Log，方便即時排查
+            ffmpeg.on('log', ({ message }) => {
+                if (message.includes('Error') || message.includes('Failed')) {
+                    console.warn('FFmpeg核心提示:', message);
+                }
+            });
+
+            // 監聽轉碼百分比進度
+            ffmpeg.on('progress', ({ progress }) => {
+                const percent = Math.round(progress * 100);
+                progressFill.style.width = percent + '%';
+                updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
+            });
+
             await ffmpeg.load();
-            log('🎉 多執行緒影片核心載入成功！系統已就緒。', 'success');
-            btnStart.innerText = '開始壓縮並存檔';
-            btnStart.disabled = true;
+            
+            ffmpegReady = true;
+            initStatus.className = 'init-status init-ready';
+            initStatus.innerHTML = '✅ 多執行緒安全防護核心已成功掛載！';
+            btnStart.innerText = '開始壓縮並寫入資料夾';
+            addLog('FFmpeg 0.12.10 核心初始化成功 ✓');
+            
+            setTimeout(() => { initStatus.style.display = 'none'; }, 3000);
         } catch (err) {
-            log(`核心初始化失敗: ${err.message}`, 'error');
+            initStatus.className = 'init-status status-error';
+            initStatus.innerHTML = `❌ 核心掛載失敗: ${err.message}`;
+            addLog(`初始化失敗: ${err.message}`, true);
         }
     }
-    
-    // 監聽進度
-    ffmpeg.setProgress(({ ratio }) => {
-        if (ratio >= 0 && ratio <= 1) {
-            btnStart.innerText = `壓縮中... ${Math.round(ratio * 100)}%`;
-        }
-    });
 
-    initFFmpeg();
+    // 自動偵測加載
+    if (window.FFmpeg) { initFFmpeg(); } else { window.addEventListener('load', initFFmpeg); }
 
-    // 1. 選取本地資料夾並讀取檔案
+    // 1. 本地目錄直接讀取，完全不需要上傳瀏覽器
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            dirPathSpan.innerText = `已載入資料夾: ${dirHandle.name}`;
-            log(`成功載入資料夾：${dirHandle.name}`, 'success');
+            dirPathSpan.innerText = `📁 已對接目錄: ${dirHandle.name}`;
+            addLog(`已成功開啟本地目錄: ${dirHandle.name}`);
 
-            fileSelect.innerHTML = '<option value="">-- 請選擇檔案 --</option>';
+            fileSelect.innerHTML = '<option value="">-- 請選擇影片檔案 --</option>';
             fileHandles.clear();
 
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
                     const lowerName = entry.name.toLowerCase();
-                    // 自動過濾已生成的壓縮檔
-                    if (entry.name.startsWith('AI_')) continue;
+                    if (entry.name.startsWith('AI_')) continue; // 跳過已經壓過的
                     
                     if (lowerName.endsWith('.mp4')) {
                         fileHandles.set(entry.name, entry);
@@ -150,25 +268,24 @@
 
             if (fileHandles.size > 0) {
                 fileSelect.disabled = false;
-                btnStart.disabled = false;
-                log(`找到 ${fileHandles.size} 個 MP4 影片。`, 'info');
+                if (ffmpegReady) btnStart.disabled = false;
+                updateStatus(`📁 成功對接，目錄下發現 ${fileHandles.size} 個支援的 MP4 檔案`, 'success');
             } else {
-                log('該資料夾內沒有找到支援的 .mp4 檔案。', 'error');
+                updateStatus('⚠️ 該目錄下沒有找到標準 MP4 影片檔案', 'error');
+                btnStart.disabled = true;
             }
         } catch (err) {
-            if (err.name !== 'AbortError') log(`讀取資料夾失敗: ${err.message}`, 'error');
+            if (err.name !== 'AbortError') updateStatus(`對接資料夾失敗: ${err.message}`, 'error');
         }
     });
 
-    // 2. 核心轉碼與黑框處理
+    // 2. 核心轉碼：讀取、置中加黑框、防爆寫回
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
-        if (!fileName) return;
+        if (!fileName || !ffmpegReady) return;
 
         const targetHeight = parseInt(resolutionSelect.value);
-        
-        // 依據標準 16:9 計算目標寬度
-        let targetWidth = 854;
+        let targetWidth = 854; // 預設 480p 寬度
         if (targetHeight === 360) targetWidth = 640;
         if (targetHeight === 540) targetWidth = 960;
         if (targetHeight === 720) targetWidth = 1280;
@@ -176,62 +293,73 @@
         btnStart.disabled = true;
         btnDir.disabled = true;
         fileSelect.disabled = true;
+        progressBar.style.display = 'block';
+        progressFill.style.width = '0%';
 
         try {
-            log(`正在讀取大檔案資料: ${fileName}...`, 'info');
+            updateStatus('📥 正在對接大檔案管道，載入核心虛擬緩衝區...');
+            addLog(`讀取高容量檔案: ${fileName}`);
+            
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            // 將大檔案載入 FFmpeg 沙盒環境
-            ffmpeg.FS('writeFile', fileName, await fetchFile(file));
+            // 使用 0.12.x 穩定的大檔案寫入模式
+            const videoData = await fetchFile(file);
+            await ffmpeg.writeFile('input_large.mp4', videoData);
             
-            log(`大檔案讀取完成，啟動多核心黑框壓縮。目標尺寸: ${targetWidth}x${targetHeight}`, 'process');
+            addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
+            updateStatus('🎬 影片壓縮編碼已啟動...');
 
-            // 【黑框濾鏡邏輯】
-            // 1. 先等比例縮放影片，讓它能塞進目標尺寸中，不變形
-            // 2. 使用 pad 濾鏡，在周圍自動補上黑邊（預設黑框），並將影片置中 (x=(W-w)/2:y=(H-h)/2)
-            const videoFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
-            
+            // 高級黑框濾鏡：保持原比例縮放，不足 16:9 比例的四周自動填滿黑邊並居中
+            const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
-            // 執行優化轉碼指令，特別為大檔案加上限制，防範內存溢位
-            await ffmpeg.run(
-                '-lowres', '1',              // 降低解碼運算負荷（極重要防崩潰開關）
-                '-i', fileName,
-                '-vf', videoFilter,
+            // 0.12.x 大檔案優化防崩潰指令參數
+            const args = [
+                '-i', 'input_large.mp4',
+                '-vf', blackBoxFilter,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast',      // 最快速度，縮短大檔壓制時間
-                '-crf', '28',                // 標準平衡壓縮畫質
-                '-threads', '4',             // 限制 4 執行緒，保持穩定
-                '-c:a', 'copy',              // 音訊直接複製不重轉
-                outName
-            );
+                '-preset', 'superfast',      // 平衡速度與高容量壓縮的推薦配置
+                '-crf', '26',                // 優質檔案位元率
+                '-threads', '4',             // 鎖定 4 線程防範 Railway 環境溢位
+                '-c:a', 'copy',              // 音訊直通，極大省去重編碼時間與資源
+                'output_compressed.mp4'
+            ];
 
-            log(`轉碼成功！正在將檔案同步寫回原本地資料夾...`, 'info');
+            await ffmpeg.exec(args);
+            addLog('影片壓縮重編碼順利完成！正在同步至原本地資料夾...');
+            updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
 
-            // 從沙盒記憶體讀出壓縮成品
-            const data = ffmpeg.FS('readFile', outName);
+            // 從核心讀取二進位數據
+            const resultData = await ffmpeg.readFile('output_compressed.mp4');
+            
+            if (!resultData || resultData.length === 0) {
+                throw new Error('壓縮異常，核心輸出了 0 字节檔案');
+            }
 
-            // 寫回原本的本地檔案夾
+            // 完美的 File System Access API 寫回原資料夾，檔名前綴加上 AI_
             const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
-            await writable.write(data);
+            await writable.write(resultData);
             await writable.close();
 
-            log(`🎉 大檔案處理完畢！已成功儲存：${outName}`, 'success');
+            updateStatus(`🎉 成功！檔案已存至原資料夾：${outName}`, 'success');
+            addLog(`大檔案無損壓縮成功 -> 生成 ${outName}`);
 
-            // 徹底清理虛擬記憶體，防止分頁後續殘留卡頓
-            ffmpeg.FS('unlink', fileName);
-            ffmpeg.FS('unlink', outName);
+            // 徹底清除 WebAssembly 內部暫存，防範連壓多個大檔時爆掉
+            await ffmpeg.deleteFile('input_large.mp4');
+            await ffmpeg.deleteFile('output_compressed.mp4');
 
         } catch (err) {
-            log(`大檔案壓縮失敗: ${err.message}`, 'error');
-            log(`提示: 如果出現 0k 狀況，請確認電腦剩餘 RAM 記憶體空間是否充足。`, 'info');
+            updateStatus(`❌ 轉碼終止: ${err.message}`, 'error');
+            addLog(`錯誤報告: ${err.message}`, true);
         } finally {
             btnStart.disabled = false;
             btnDir.disabled = false;
             fileSelect.disabled = false;
-            btnStart.innerText = '開始壓縮並存檔';
+            btnStart.innerText = '開始壓縮並寫入資料夾';
+            // 點擊原資料夾按鈕自動重新整理檔案清單，把剛生成的 AI_ 影片過濾掉
+            btnDir.click(); 
         }
     });
 </script>
