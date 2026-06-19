@@ -2,17 +2,13 @@ const express = require('express');
 const path = require('path');
 const app = express();
 
-// 🛠️ 【終極修正】不用引入 mime 套件！直接強行注入 Express 底層的型態對照表
-if (express.static && express.static.mime && express.static.mime.types) {
-    express.static.mime.types['wasm'] = 'application/wasm';
-} else {
-    // 預防萬一，有些 Express 版本可以透過這個底層注入
-    try {
-        require('send').mime.define({ 'application/wasm': ['wasm'] });
-    } catch (e) {
-        console.log("MIME define skipped or handled by server environment");
+// 🛠️ 1. 正確設定 WASM MIME 類型 (不需要 mime 套件)
+app.use((req, res, next) => {
+    if (req.url.endsWith('.wasm')) {
+        res.setHeader('Content-Type', 'application/wasm');
     }
-}
+    next();
+});
 
 // 🛠️ 2. 確保多執行緒隔離環境安全標頭（FFmpeg 必備）
 app.use((req, res, next) => {
