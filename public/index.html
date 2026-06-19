@@ -204,7 +204,6 @@
 
     async function initFFmpeg() {
         try {
-            // 💡 雙重相容性檢查：UMD 模組可能掛在 window.FFmpegWASM 或 window.FFmpeg 上
             let FFmpegModule = window.FFmpegWASM || window.FFmpeg;
             
             if (!FFmpegModule || !FFmpegModule.FFmpeg) {
@@ -226,8 +225,11 @@
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            // 完全不帶參數，讓核心自動去同目錄抓 814.ffmpeg.js
-            await ffmpeg.load();
+            // 🎯 【關鍵修正】明確指引 corePath 與 wasmPath 路徑，阻止它去抓錯誤的 .js 檔
+            await ffmpeg.load({
+                corePath: './ffmpeg.min.js',
+                wasmPath: './814.ffmpeg.wasm'
+            });
             
             ffmpegReady = true;
             initStatus.className = 'init-status init-ready';
@@ -311,7 +313,6 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            // 安全相容提取 fetchFile
             let FFmpegModule = window.FFmpegWASM || window.FFmpeg;
             const videoData = await FFmpegModule.fetchFile(file);
             await ffmpeg.writeFile('input_large.mp4', videoData);
