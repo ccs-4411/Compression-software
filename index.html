@@ -1,12 +1,12 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 圖片本地壓縮工具</title>
+    <title>AI 影片本地壓縮工具 (MP4)</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
             background-color: #f5f5f7;
             color: #333;
             padding: 40px 20px;
@@ -18,82 +18,49 @@
             padding: 30px;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-            max-width: 500px;
+            max-width: 550px;
             width: 100%;
         }
-        h2 {
-            margin-top: 0;
-            color: #1d1d1f;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 15px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: #555;
-        }
-        select, button {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            font-size: 16px;
-            box-sizing: border-box;
-        }
-        select:focus {
-            outline: none;
-            border-color: #0071e3;
-        }
-        button {
-            background-color: #0071e3;
-            color: white;
-            border: none;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 10px;
-        }
-        button:hover {
-            background-color: #0077ed;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
+        h2 { margin-top: 0; color: #1d1d1f; border-bottom: 1px solid #eee; padding-bottom: 15px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 600; color: #555; }
+        select, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+        select:focus { outline: none; border-color: #0071e3; }
+        button { background-color: #0071e3; color: white; border: none; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+        button:hover { background-color: #0077ed; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
         #log {
             margin-top: 20px;
             padding: 15px;
             background: #f9f9fb;
             border: 1px solid #e5e5ea;
             border-radius: 8px;
-            max-height: 200px;
+            max-height: 250px;
             overflow-y: auto;
             font-family: monospace;
             font-size: 13px;
             white-space: pre-wrap;
         }
-        .success { color: #34c759; }
-        .error { color: #ff3b30; }
+        .success { color: #34c759; font-weight: bold; }
+        .error { color: #ff3b30; font-weight: bold; }
         .info { color: #0071e3; }
+        .process { color: #f5a623; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.11.6/ffmpeg.min.js"></script>
 </head>
 <body>
 
 <div class="container">
-    <h2>AI 圖片本地壓縮工具</h2>
+    <h2>AI 影片本地壓縮工具 (MP4)</h2>
     
     <div class="form-group">
-        <label>1. 選擇來源圖片所在的資料夾</label>
+        <label>1. 選擇影片所在的資料夾</label>
         <button id="btnDir">選取資料夾</button>
         <span id="dirPath" style="font-size: 13px; color: #666; display:block; margin-top:5px;">尚未選擇資料夾</span>
     </div>
 
     <div class="form-group">
-        <label for="fileSelect">2. 選擇要壓縮的檔案</label>
+        <label for="fileSelect">2. 選擇要壓縮的 MP4 影片</label>
         <select id="fileSelect" disabled>
             <option value="">-- 請先選取資料夾 --</option>
         </select>
@@ -109,14 +76,16 @@
         </select>
     </div>
 
-    <button id="btnStart" disabled>開始壓縮並存檔</button>
-
-    <div id="log">系統就緒。請先選擇資料夾以讀取檔案。</div>
+    <button id="btnStart" disabled>載入元件中，請稍候...</button>
+    <div id="log">系統正在初始化...</div>
 </div>
 
 <script>
+    const { createFFmpeg, fetchFile } = FFmpeg;
+    const ffmpeg = createFFmpeg({ log: false }); // 設為 true 可在瀏覽器主控台看詳細進度
+
     let dirHandle = null;
-    const fileHandles = new Map(); // 儲存檔名與對應的 fileHandle
+    const fileHandles = new Map();
 
     const btnDir = document.getElementById('btnDir');
     const fileSelect = document.getElementById('fileSelect');
@@ -127,29 +96,47 @@
 
     function log(message, type = 'info') {
         const time = new Date().toLocaleTimeString();
-        const msgHtml = `<span class="${type}">[${time}] ${message}</span><br>`;
-        logDiv.innerHTML += msgHtml;
+        logDiv.innerHTML += `<span class="${type}">[${time}] ${message}</span><br>`;
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    // 1. 點擊選擇資料夾
+    // 初始化：載入 FFmpeg 核心核心（大約需要數秒）
+    async function initFFmpeg() {
+        try {
+            log('正在下載並初始化網頁版影片壓縮核心...', 'info');
+            await ffmpeg.load();
+            log('影片壓縮核心載入成功！系統就緒。', 'success');
+            btnStart.innerText = '開始壓縮並存檔';
+        } catch (err) {
+            log(`核心載入失敗，請重新整理網頁: ${err.message}`, 'error');
+        }
+    }
+    initFFmpeg();
+
+    // 監聽 FFmpeg 的內部進度日誌
+    ffmpeg.setProgress(({ ratio }) => {
+        if (ratio >= 0 && ratio <= 1) {
+            btnStart.innerText = `壓縮中... ${Math.round(ratio * 100)}%`;
+        }
+    });
+
+    // 1. 選取本地資料夾
     btnDir.addEventListener('click', async () => {
         try {
-            // 請求使用者選取資料夾，並給予讀寫權限
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
             dirPathSpan.innerText = `已載入資料夾: ${dirHandle.name}`;
             log(`成功載入資料夾：${dirHandle.name}`, 'success');
 
-            // 清空舊選單
             fileSelect.innerHTML = '<option value="">-- 請選擇檔案 --</option>';
             fileHandles.clear();
 
-            // 走訪資料夾內的檔案
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
                     const lowerName = entry.name.toLowerCase();
-                    // 僅篩選常見圖片格式
-                    if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg') || lowerName.endsWith('.png') || lowerName.endsWith('.webp')) {
+                    // 過濾掉已經壓過的檔案，且只抓 MP4
+                    if (entry.name.startsWith('AI_')) continue;
+                    
+                    if (lowerName.endsWith('.mp4')) {
                         fileHandles.set(entry.name, entry);
                         const opt = document.createElement('option');
                         opt.value = entry.name;
@@ -162,104 +149,82 @@
             if (fileHandles.size > 0) {
                 fileSelect.disabled = false;
                 btnStart.disabled = false;
-                log(`找到 ${fileHandles.size} 個支援的圖片檔案。`, 'info');
+                log(`找到 ${fileHandles.size} 個 MP4 影片檔案。`, 'info');
             } else {
-                log('該資料夾內沒有找到支援的圖片檔案 (JPG/PNG/WEBP)。', 'error');
+                log('該資料夾內沒有找到支援的 .mp4 檔案。', 'error');
             }
-
         } catch (err) {
-            if (err.name !== 'AbortError') {
-                log(`讀取資料夾失敗: ${err.message}`, 'error');
-            }
+            if (err.name !== 'AbortError') log(`讀取資料夾失敗: ${err.message}`, 'error');
         }
     });
 
-    // 2. 點擊開始壓縮並寫回原資料夾
+    // 2. 開始壓縮影片
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
         if (!fileName) {
-            log('請先選擇一個檔案！', 'error');
+            log('請先選擇一個影片檔案！', 'error');
             return;
         }
 
-        const targetSize = parseInt(resolutionSelect.value);
-        log(`開始處理檔案: ${fileName} -> 目標解析度: ${targetSize}p`, 'info');
+        const targetSize = resolutionSelect.value;
+        btnStart.disabled = true;
+        btnDir.disabled = true;
+        fileSelect.disabled = true;
 
         try {
-            // 取得原本檔案的 File 物件
+            log(`正在讀取影片原始資料: ${fileName}...`, 'info');
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            // 將檔案轉為 Image 物件以獲取寬高
-            const img = await loadImage(file);
+            // 把檔案寫入 FFmpeg 的虛擬記憶體檔案系統中
+            ffmpeg.FS('writeFile', fileName, await fetchFile(file));
             
-            // 計算縮放比例（以長邊為基準進行等比例縮放）
-            let targetWidth = img.width;
-            let targetHeight = img.height;
+            log(`影片讀取完成，開始進行解析度調整 (${targetSize}p)... 過程中網頁可能反應較慢，請勿關閉視窗。`, 'process');
+
+            // FFmpeg 濾鏡指令：自動判斷橫豎幅，將長邊縮小到 targetSize，另一邊等比例縮放（且維持偶數像素以符合 MP4 規範）
+            const scaleFilter = `scale='if(gt(iw,ih),min(${targetSize},iw),-2)':'if(gt(iw,ih),-2,min(${targetSize},ih))'`;
             
-            if (img.width > img.height) {
-                if (img.width > targetSize) {
-                    targetHeight = Math.round((img.height * targetSize) / img.width);
-                    targetWidth = targetSize;
-                }
-            } else {
-                if (img.height > targetSize) {
-                    targetWidth = Math.round((img.width * targetSize) / img.height);
-                    targetHeight = targetSize;
-                }
-            }
+            const outName = `AI_${fileName}`;
 
-            // 使用 Canvas 進行重繪縮放
-            const canvas = document.createElement('canvas');
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+            // 執行壓縮指令
+            // -preset ultrafast 用最快速度壓制以防瀏覽器崩潰；-crf 26 在檔案大小與畫質間取得折衷
+            await ffmpeg.run(
+                '-i', fileName,
+                '-vf', scaleFilter,
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-crf', '26',
+                '-c:a', 'copy', // 音訊直接複製不重編碼，節省時間
+                outName
+            );
 
-            // 轉成 Blob (預設使用原格式，若不支援則用 jpeg，品質設為 0.85)
-            const mimeType = file.type || 'image/jpeg';
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, mimeType, 0.85));
+            log(`影片重編碼完成！正在將新檔案寫回您的資料夾...`, 'info');
 
-            // 設定新檔名：前面加上 AI
-            const newFileName = `AI_${fileName}`;
-            log(`準備寫入新檔案: ${newFileName} (${targetWidth}x${targetHeight})`, 'info');
+            // 從 FFmpeg 虛擬記憶體讀出壓縮完的檔案
+            const data = ffmpeg.FS('readFile', outName);
 
-            // 在同一個資料夾下建立新檔案
-            const newFileHandle = await dirHandle.getFileHandle(newFileName, { create: true });
+            // 建立本地檔案並寫入
+            const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
-            await writable.write(blob);
+            await writable.write(data);
             await writable.close();
 
-            log(`成功存檔！位置：原資料夾/${newFileName}`, 'success');
+            log(`🎉 成功存檔！輸出檔名：${outName}`, 'success');
 
-            // 重新整理檔案選單，把新生成的 AI_ 檔案放進去（或者您可以自行過濾掉）
-            fileHandles.set(newFileName, newFileHandle);
-            const opt = document.createElement('option');
-            opt.value = newFileName;
-            opt.textContent = newFileName;
-            fileSelect.appendChild(opt);
+            // 釋放虛擬記憶體
+            ffmpeg.FS('unlink', fileName);
+            ffmpeg.FS('unlink', outName);
 
         } catch (err) {
-            log(`壓縮或存檔失敗: ${err.message}`, 'error');
+            log(`影片壓縮失敗: ${err.message}`, 'error');
+        } finally {
+            // 還原按鈕狀態
+            btnStart.disabled = false;
+            btnDir.disabled = false;
+            fileSelect.disabled = false;
+            btnStart.innerText = '開始壓縮並存檔';
         }
     });
-
-    // 輔助函式：將 File 轉為 Image 物件
-    function loadImage(file) {
-        return new Promise((resolve, reject) => {
-            const url = URL.createObjectURL(file);
-            const img = new Image();
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-                resolve(img);
-            };
-            img.onerror = (err) => {
-                URL.revokeObjectURL(url);
-                reject(err);
-            };
-            img.src = url;
-        });
-    }
 </script>
 
 </body>
