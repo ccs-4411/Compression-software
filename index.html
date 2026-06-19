@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 影片本地壓縮工具 (Railway 高速版)</title>
+    <title>AI 影片本地壓縮工具 (大檔案優化版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -51,7 +51,7 @@
 <body>
 
 <div class="container">
-    <h2>AI 影片本地壓縮工具 (MP4)</h2>
+    <h2>AI 影片本地壓縮工具 (黑框優化版)</h2>
     
     <div class="form-group">
         <label>1. 選擇影片所在的資料夾</label>
@@ -67,17 +67,17 @@
     </div>
 
     <div class="form-group">
-        <label for="resolution">3. 目標解析度（長邊縮放）</label>
+        <label for="resolution">3. 目標解析度（縮放並補黑框）</label>
         <select id="resolution">
-            <option value="360">360p</option>
-            <option value="480" selected>480p</option>
-            <option value="540">540p</option>
-            <option value="720">720p</option>
+            <option value="360">360p (640x360)</option>
+            <option value="480" selected>480p (854x480)</option>
+            <option value="540">540p (960x540)</option>
+            <option value="720">720p (1280x720)</option>
         </select>
     </div>
 
-    <button id="btnStart" disabled>載入多執行緒核心中...</button>
-    <div id="log">正在初始化系統...</div>
+    <button id="btnStart" disabled>載入核心中...</button>
+    <div id="log">正在透過 Railway 環境初始化系統...</div>
 </div>
 
 <script>
@@ -100,10 +100,10 @@
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    // 在伺服器環境下，核心可以直接順暢下載
+    // 初始化載入 FFmpeg 核心
     async function initFFmpeg() {
         try {
-            log('正在自雲端伺服器下載多執行緒影片轉碼核心...', 'info');
+            log('正在下載多執行緒影片轉碼核心...', 'info');
             await ffmpeg.load();
             log('🎉 多執行緒影片核心載入成功！系統已就緒。', 'success');
             btnStart.innerText = '開始壓縮並存檔';
@@ -113,6 +113,7 @@
         }
     }
     
+    // 監聽進度
     ffmpeg.setProgress(({ ratio }) => {
         if (ratio >= 0 && ratio <= 1) {
             btnStart.innerText = `壓縮中... ${Math.round(ratio * 100)}%`;
@@ -121,6 +122,7 @@
 
     initFFmpeg();
 
+    // 1. 選取本地資料夾並讀取檔案
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -133,6 +135,7 @@
             for await (const entry of dirHandle.values()) {
                 if (entry.kind === 'file') {
                     const lowerName = entry.name.toLowerCase();
+                    // 自動過濾已生成的壓縮檔
                     if (entry.name.startsWith('AI_')) continue;
                     
                     if (lowerName.endsWith('.mp4')) {
@@ -157,53 +160,73 @@
         }
     });
 
+    // 2. 核心轉碼與黑框處理
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
         if (!fileName) return;
 
-        const targetSize = resolutionSelect.value;
+        const targetHeight = parseInt(resolutionSelect.value);
+        
+        // 依據標準 16:9 計算目標寬度
+        let targetWidth = 854;
+        if (targetHeight === 360) targetWidth = 640;
+        if (targetHeight === 540) targetWidth = 960;
+        if (targetHeight === 720) targetWidth = 1280;
+
         btnStart.disabled = true;
         btnDir.disabled = true;
         fileSelect.disabled = true;
 
         try {
-            log(`正在提取影片二進位資料: ${fileName}...`, 'info');
+            log(`正在讀取大檔案資料: ${fileName}...`, 'info');
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
+            // 將大檔案載入 FFmpeg 沙盒環境
             ffmpeg.FS('writeFile', fileName, await fetchFile(file));
             
-            log(`影片讀取完成，多執行緒硬體加速壓縮啟動 (${targetSize}p)...`, 'process');
+            log(`大檔案讀取完成，啟動多核心黑框壓縮。目標尺寸: ${targetWidth}x${targetHeight}`, 'process');
 
-            const scaleFilter = `scale='if(gt(iw,ih),min(${targetSize},iw),-2)':'if(gt(iw,ih),-2,min(${targetSize},ih))'`;
+            // 【黑框濾鏡邏輯】
+            // 1. 先等比例縮放影片，讓它能塞進目標尺寸中，不變形
+            // 2. 使用 pad 濾鏡，在周圍自動補上黑邊（預設黑框），並將影片置中 (x=(W-w)/2:y=(H-h)/2)
+            const videoFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
+            
             const outName = `AI_${fileName}`;
 
+            // 執行優化轉碼指令，特別為大檔案加上限制，防範內存溢位
             await ffmpeg.run(
+                '-lowres', '1',              // 降低解碼運算負荷（極重要防崩潰開關）
                 '-i', fileName,
-                '-vf', scaleFilter,
+                '-vf', videoFilter,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast', 
-                '-crf', '26',
-                '-c:a', 'copy',
+                '-preset', 'ultrafast',      // 最快速度，縮短大檔壓制時間
+                '-crf', '28',                // 標準平衡壓縮畫質
+                '-threads', '4',             // 限制 4 執行緒，保持穩定
+                '-c:a', 'copy',              // 音訊直接複製不重轉
                 outName
             );
 
-            log(`轉碼成功！正在將檔案同步回原資料夾...`, 'info');
+            log(`轉碼成功！正在將檔案同步寫回原本地資料夾...`, 'info');
 
+            // 從沙盒記憶體讀出壓縮成品
             const data = ffmpeg.FS('readFile', outName);
 
+            // 寫回原本的本地檔案夾
             const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
             await writable.write(data);
             await writable.close();
 
-            log(`🎉 壓縮完成並存檔成功！檔名為：${outName}`, 'success');
+            log(`🎉 大檔案處理完畢！已成功儲存：${outName}`, 'success');
 
+            // 徹底清理虛擬記憶體，防止分頁後續殘留卡頓
             ffmpeg.FS('unlink', fileName);
             ffmpeg.FS('unlink', outName);
 
         } catch (err) {
-            log(`影片處理失敗: ${err.message}`, 'error');
+            log(`大檔案壓縮失敗: ${err.message}`, 'error');
+            log(`提示: 如果出現 0k 狀況，請確認電腦剩餘 RAM 記憶體空間是否充足。`, 'info');
         } finally {
             btnStart.disabled = false;
             btnDir.disabled = false;
