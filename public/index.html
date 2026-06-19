@@ -212,7 +212,6 @@
         addLog('正從 CDN 安全管道拉取核心晶片...');
 
         try {
-            // 防禦性檢查，若 CDN 檔案載入被阻擋則精準提示
             if (!window.FFmpeg) {
                 throw new Error('CDN 管道發生異常，請確認您的網路環境是否阻擋了 cdnjs。');
             }
@@ -246,7 +245,7 @@
         }
     }
 
-    // 🎯 背景默默整理資料夾檔案清單（完全獨立，不干涉瀏覽器使用者手勢限制）
+    // 🎯 背景整理資料夾檔案清單
     async function refreshFilesSilently() {
         if (!dirHandle) return;
         try {
@@ -258,6 +257,7 @@
                     const lowerName = entry.name.toLowerCase();
                     if (entry.name.startsWith('AI_')) continue; 
                     
+                    // 修正：同時支援 .mp4 與 .MP4
                     if (lowerName.endsWith('.mp4')) {
                         fileHandles.set(entry.name, entry);
                         const opt = document.createElement('option');
@@ -282,7 +282,7 @@
         }
     }
 
-    // 1. 使用者親手點擊：初次對接資料夾（具備手勢合法授權）
+    // 1. 使用者點擊：對接資料夾
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -296,7 +296,7 @@
         } catch (err) {
             if (err.name !== 'AbortError') updateStatus(`對接資料夾失敗: ${err.message}`, 'error');
         }
-    });
+    }              );
 
     // 2. 轉碼執行核心
     btnStart.addEventListener('click', async () => {
@@ -342,4 +342,51 @@
             addLog('檔案就緒，開始配置相容性安全渲染參數...');
             updateStatus('🎬 影片壓縮編碼已啟動...');
 
-            const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:
+            // 補齊：影片黑框置中濾鏡參數與轉碼執行指令
+            const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
+            
+            addLog('核心正在計算位元率，開始調度虛擬處理器...');
+            await ffmpeg.run(
+                '-i', 'input_large.mp4',
+                '-vf', blackBoxFilter,
+                '-c:v', 'libx264',
+                '-crf', '26',
+                '-preset', 'fast',
+                '-c:a', 'aac',
+                '-b:a', '128k',
+                'output.mp4'
+            );
+
+            addLog('解碼完成！正在將資料導回本地硬碟...');
+            const outputData = ffmpeg.FS('readFile', 'output.mp4');
+
+            // 產出新檔名並寫入原資料夾
+            const outFileName = `AI_compressed_${targetHeight}p_${fileName}`;
+            const newFileHandle = await dirHandle.getFileHandle(outFileName, { create: true });
+            const writable = await newFileHandle.createWritable();
+            await writable.write(outputData);
+            await writable.close();
+
+            // 清理暫存虛擬檔案
+            ffmpeg.FS('unlink', 'input_large.mp4');
+            ffmpeg.FS('unlink', 'output.mp4');
+
+            updateStatus(`🎉 壓縮成功！已儲存為：${outFileName}`, 'success');
+            addLog(`檔案寫入完畢：${outFileName} ✓`);
+            
+            // 重新刷新選單
+            await refreshFilesSilently();
+
+        } catch (err) {
+            updateStatus(`壓縮失敗: ${err.message}`, 'error');
+            addLog(`執行錯誤: ${err.message}`, true);
+        } finally {
+            btnStart.disabled = false;
+            btnDir.disabled = false;
+            fileSelect.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>
