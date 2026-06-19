@@ -1,11 +1,10 @@
 const express = require('express');
 const path = require('path');
+const mime = require('mime');
 const app = express();
 
-// 🛠️ 1. 改用 Express 原生字典定義（100% 不崩潰、免安裝 mime 套件）
-if (express.static.mime && express.static.mime.types) {
-    express.static.mime.types['wasm'] = 'application/wasm';
-}
+// 🛠️ 1. 正確設定 WASM MIME 類型
+mime.define({ 'application/wasm': ['wasm'] });
 
 // 🛠️ 2. 確保多執行緒隔離環境安全標頭（FFmpeg 必備）
 app.use((req, res, next) => {
