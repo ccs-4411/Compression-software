@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎬 AI 影片本地壓縮工具 - 本地核心穩定版</title>
+    <title>🎬 AI 影片本地壓縮工具 - 原始碼修正版</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
@@ -132,10 +132,10 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.10 自託管本地安全版</div>
+    <div class="subtitle">⚡ 核心版本：0.12.15 UMD 部署修正版</div>
     
     <div class="init-status init-loading" id="initStatus">
-        ⚙️ 正在自 Railway 本地磁區掛載獨立安全核心...
+        ⚙️ 正在自 Railway 靜態磁區掛載轉碼核心...
     </div>
     
     <div class="form-group">
@@ -171,10 +171,12 @@
     <div id="log"></div>
 </div>
 
-<script src="./ffmpeg.min.js"></script>
+<script>
+!function(e,t){"object"==typeof exports&&"object"==typeof module?module.exports=t():"function"==typeof define&&define.amd?define([],t):"object"==typeof exports?exports.FFmpegWASM=t():e.FFmpegWASM=t()}(self,(()=>(()=>{"use strict";var e={m:{},d:(t,s)=>{for(var r in s)e.o(s,r)&&!e.o(t,r)&&Object.defineProperty(t,r,{enumerable:!0,get:s[r]})},u:e=>e+".ffmpeg.js"};e.g=function(){if("object"==typeof globalThis)return globalThis;try{return this||new Function("return this")()}catch(e){if("object"==typeof window)return window}}(),e.o=(e,t)=>Object.prototype.hasOwnProperty.call(e,t),e.r=e=>{"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},(()=>{var t;e.g.importScripts&&(t=e.g.location+"");var s=e.g.document;if(!t&&s&&(s.currentScript&&(t=s.currentScript.src),!t)){var r=s.getElementsByTagName("script");if(r.length)for(var a=r.length-1;a>-1&&!t;)t=r[a--].src}if(!t)throw new Error("Automatic publicPath is not supported in this browser");t=t.replace(/#.*$/,"").replace(/\?.*$/,"").replace(/\/[^\/]+$/,"/"),e.p=t})(),e.b=document.baseURI||self.location.href;var t,s={};e.r(s),e.d(s,{FFFSType:()=>n,FFmpeg:()=>i}),function(e){e.LOAD="LOAD",e.EXEC="EXEC",e.FFPROBE="FFPROBE",e.WRITE_FILE="WRITE_FILE",e.READ_FILE="READ_FILE",e.DELETE_FILE="DELETE_FILE",e.RENAME="RENAME",e.CREATE_DIR="CREATE_DIR",e.LIST_DIR="LIST_DIR",e.DELETE_DIR="DELETE_DIR",e.ERROR="ERROR",e.DOWNLOAD="DOWNLOAD",e.PROGRESS="PROGRESS",e.LOG="LOG",e.MOUNT="MOUNT",e.UNMOUNT="UNMOUNT"}(t||(t={}));const r=(()=>{let e=0;return()=>e++})(),a=(new Error("unknown message type"),new Error("ffmpeg is not loaded, call `await ffmpeg.load()` first")),o=new Error("called FFmpeg.terminate()");new Error("failed to import ffmpeg-core.js");class i{#e=null;#t={};#s={};#r=[];#a=[];loaded=!1;#o=()=>{this.#e&&(this.#e.onmessage=({data:{id:e,type:s,data:r}})=>{switch(s){case t.LOAD:this.loaded=!0,this.#t[e](r);break;case t.MOUNT:case t.UNMOUNT:case t.EXEC:case t.FFPROBE:case t.WRITE_FILE:case t.READ_FILE:case t.DELETE_FILE:case t.RENAME:case t.CREATE_DIR:case t.LIST_DIR:case t.DELETE_DIR:this.#t[e](r);break;case t.LOG:this.#r.forEach((e=>e(r)));break;case t.PROGRESS:this.#a.forEach((e=>e(r)));break;case t.ERROR:this.#s[e](r)}delete this.#t[e],delete this.#s[e]})};#i=({type:e,data:t},s=[],o)=>this.#e?new Promise(((a,i)=>{const n=r();this.#e&&this.#e.postMessage({id:n,type:e,data:t},s),this.#t[n]=a,this.#s[n]=i,o?.addEventListener("abort",(()=>{i(new DOMException(`Message # ${n} was aborted`,"AbortError"))}),{once:!0})})):Promise.reject(a);on(e,t){"log"===e?this.#r.push(t):"progress"===e&&this.#a.push(t)}off(e,t){"log"===e?this.#r=this.#r.filter((e=>e!==t)):"progress"===e&&(this.#a=this.#a.filter((e=>e!==t)))}load=({classWorkerURL:s,...r}={},{signal:a}={})=>(this.#e||(this.#e=s?new Worker(new URL(s,"file:///Users/focus/Projects/ffmpeg.wasm/packages/ffmpeg/dist/esm/classes.js"),{type:"module"}):new Worker(new URL(e.p+e.u(814),e.b),{type:void 0}),this.#o()),this.#i({type:t.LOAD,data:r},void 0,a));exec=(e,s=-1,{signal:r}={})=>this.#i({type:t.EXEC,data:{args:e,timeout:s}},void 0,r);ffprobe=(e,s=-1,{signal:r}={})=>this.#i({type:t.FFPROBE,data:{args:e,timeout:s}},void 0,r);terminate=()=>{const e=Object.keys(this.#s);for(const t of e)this.#s[t](o),delete this.#s[t],delete this.#t[t];this.#e&&(this.#e.terminate(),this.#e=null,this.loaded=!1)};writeFile=(e,s,{signal:r}={})=>{const a=[];return s instanceof Uint8Array&&a.push(s.buffer),this.#i({type:t.WRITE_FILE,data:{path:e,data:s}},a,r)};mount=(e,s,r)=>this.#i({type:t.MOUNT,data:{fsType:e,options:s,mountPoint:r}},[]);unmount=e=>this.#i({type:t.UNMOUNT,data:{mountPoint:e}},[]);readFile=(e,s="binary",{signal:r}={})=>this.#i({type:t.READ_FILE,data:{path:e,encoding:s}},void 0,r);deleteFile=(e,{signal:s}={})=>this.#i({type:t.DELETE_FILE,data:{path:e}},void 0,s);rename=(e,s,{signal:r}={})=>this.#i({type:t.RENAME,data:{oldPath:e,newPath:s}},void 0,r);createDir=(e,{signal:s}={})=>this.#i({type:t.CREATE_DIR,data:{path:e}},void 0,s);listDir=(e,{signal:s}={})=>this.#i({type:t.LIST_DIR,data:{path:e}},void 0,s);deleteDir=(e,{signal:s}={})=>this.#i({type:t.DELETE_DIR,data:{path:e}},void 0,s)}var n;return function(e){e.MEMFS="MEMFS",e.NODEFS="NODEFS",e.NODERAWFS="NODERAWFS",e.IDBFS="IDBFS",e.WORKERFS="WORKERFS",e.PROXYFS="PROXYFS"}(n||(n={})),s})()));
+</script>
 
 <script>
-    let FFmpegClass, fetchFile;
+    // 💡 提取全域物件（在你的原始碼中，它被掛在 window.FFmpegWASM 上）
     let ffmpeg;
     let ffmpegReady = false;
 
@@ -203,16 +205,13 @@
         statusDiv.textContent = message;
     }
 
-    // 採用 0.12.x 本地對接機制
     async function initFFmpeg() {
         try {
-            if (!window.FFmpeg) {
-                throw new Error('找不到本地全域 FFmpeg 物件，請檢查伺服器端靜態資源是否配置妥當');
+            if (!window.FFmpegWASM || !window.FFmpegWASM.FFmpeg) {
+                throw new Error('找不到內嵌的 FFmpegWASM 物件');
             }
             
-            FFmpegClass = window.FFmpeg.FFmpeg;
-            fetchFile = window.FFmpeg.fetchFile;
-            
+            const FFmpegClass = window.FFmpegWASM.FFmpeg;
             ffmpeg = new FFmpegClass();
             
             ffmpeg.on('log', ({ message }) => {
@@ -227,21 +226,20 @@
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            // 🛠️ 核心修正：指定多執行緒 worker 抓取同目錄下的本地 814.ffmpeg.min.js，絕不走外網
-            await ffmpeg.load({
-                classWorkerURL: './814.ffmpeg.min.js'
-            });
+            // 🛠️ 終極修正：完全不傳 classWorkerURL，避開 UMD 的 file:/// 絕對路徑 Bug！
+            // 它會自動利用當前網址路徑，去抓取同目錄下的 "814.ffmpeg.js"
+            await ffmpeg.load();
             
             ffmpegReady = true;
             initStatus.className = 'init-status init-ready';
-            initStatus.innerHTML = '✅ 本地自託管隔離核心已成功掛載！';
+            initStatus.innerHTML = '✅ 本地核心跨域限制已安全解開！';
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            addLog('FFmpeg 本地獨立核心載入成功 ✓');
+            addLog('FFmpeg 本地安全核心載入成功 ✓');
             
             setTimeout(() => { initStatus.style.display = 'none'; }, 3000);
         } catch (err) {
             initStatus.className = 'init-status status-error';
-            initStatus.innerHTML = `❌ 本地核心掛載失敗: ${err.message}<br><small>請確認 814.ffmpeg.min.js 是否已放在相同專案路徑下</small>`;
+            initStatus.innerHTML = `❌ 核心掛載失敗: ${err.message}<br><small>請確認同目錄下是否存在 814.ffmpeg.js 檔案</small>`;
             addLog(`初始化失敗: ${err.message}`, true);
         }
     }
@@ -314,7 +312,8 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            const videoData = await fetchFile(file);
+            // 使用內建解構出的 fetchFile
+            const videoData = await window.FFmpegWASM.fetchFile(file);
             await ffmpeg.writeFile('input_large.mp4', videoData);
             
             addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
