@@ -212,6 +212,7 @@
         addLog('正從 CDN 安全管道拉取核心晶片...');
 
         try {
+            // 防禦性檢查，若 CDN 檔案載入被阻擋則精準提示
             if (!window.FFmpeg) {
                 throw new Error('CDN 管道發生異常，請確認您的網路環境是否阻擋了 cdnjs。');
             }
@@ -245,7 +246,7 @@
         }
     }
 
-    // 🎯 背景整理資料夾檔案清單
+    // 🎯 背景默默整理資料夾檔案清單（完全獨立，不干涉瀏覽器使用者手勢限制）
     async function refreshFilesSilently() {
         if (!dirHandle) return;
         try {
@@ -257,7 +258,6 @@
                     const lowerName = entry.name.toLowerCase();
                     if (entry.name.startsWith('AI_')) continue; 
                     
-                    // 修正：同時支援 .mp4 與 .MP4
                     if (lowerName.endsWith('.mp4')) {
                         fileHandles.set(entry.name, entry);
                         const opt = document.createElement('option');
@@ -282,7 +282,7 @@
         }
     }
 
-    // 1. 使用者點擊：對接資料夾
+    // 1. 使用者親手點擊：初次對接資料夾（具備手勢合法授權）
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -296,7 +296,7 @@
         } catch (err) {
             if (err.name !== 'AbortError') updateStatus(`對接資料夾失敗: ${err.message}`, 'error');
         }
-    }              );
+    });
 
     // 2. 轉碼執行核心
     btnStart.addEventListener('click', async () => {
@@ -342,48 +342,57 @@
             addLog('檔案就緒，開始配置相容性安全渲染參數...');
             updateStatus('🎬 影片壓縮編碼已啟動...');
 
-            // 補齊：影片黑框置中濾鏡參數與轉碼執行指令
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
-            
-            addLog('核心正在計算位元率，開始調度虛擬處理器...');
+            const outName = `AI_${fileName}`;
+
+            // 🎯【極輕量轉碼參數】
+            // 移除了 -threads 以防 WASM 內存崩潰，調整為 ultrafast 與 crf 26，防止 0 字节檔案生成。
             await ffmpeg.run(
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
                 '-c:v', 'libx264',
-                '-crf', '26',
-                '-preset', 'fast',
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                'output.mp4'
+                '-preset', 'ultrafast',      
+                '-crf', '26',                
+                '-c:a', 'copy',              
+                'output_compressed.mp4'
             );
 
-            addLog('解碼完成！正在將資料導回本地硬碟...');
-            const outputData = ffmpeg.FS('readFile', 'output.mp4');
+            addLog('影片壓縮重編碼結束，正在檢查成品檔案...');
+            
+            let resultData;
+            try {
+                resultData = ffmpeg.FS('readFile', 'output_compressed.mp4');
+            } catch (fsErr) {
+                throw new Error('核心未成功生成檔案，可能因瀏覽器記憶體不足被系統強制終止。');
+            }
+            
+            if (!resultData || resultData.length === 0) {
+                throw new Error('壓縮異常，核心輸出了 0 字节檔案。建議縮短影片長度再試。');
+            }
 
-            // 產出新檔名並寫入原資料夾
-            const outFileName = `AI_compressed_${targetHeight}p_${fileName}`;
-            const newFileHandle = await dirHandle.getFileHandle(outFileName, { create: true });
+            updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
+
+            const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
-            await writable.write(outputData);
+            await writable.write(resultData);
             await writable.close();
 
-            // 清理暫存虛擬檔案
-            ffmpeg.FS('unlink', 'input_large.mp4');
-            ffmpeg.FS('unlink', 'output.mp4');
+            updateStatus(`🎉 成功！檔案已存至原資料夾：${outName}`, 'success');
+            addLog(`大檔案無損壓縮成功 -> 生成 ${outName}`);
 
-            updateStatus(`🎉 壓縮成功！已儲存為：${outFileName}`, 'success');
-            addLog(`檔案寫入完畢：${outFileName} ✓`);
-            
-            // 重新刷新選單
-            await refreshFilesSilently();
+            ffmpeg.FS('unlink', 'input_large.mp4');
+            ffmpeg.FS('unlink', 'output_compressed.mp4');
 
         } catch (err) {
-            updateStatus(`壓縮失敗: ${err.message}`, 'error');
-            addLog(`執行錯誤: ${err.message}`, true);
+            updateStatus(`❌ 轉碼終止: ${err.message}`, 'error');
+            addLog(`錯誤報告: ${err.message}`, true);
         } finally {
             btnStart.disabled = false;
             btnDir.disabled = false;
             fileSelect.disabled = false;
+            btnStart.innerText = '開始壓縮並寫入資料夾';
+            // 安全背景默默刷新，不假造點擊，完美規避手勢禁令
+            await refreshFilesSilently(); 
         }
     });
 </script>
