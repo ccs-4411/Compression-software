@@ -172,7 +172,7 @@
     <div id="log"></div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/ffmpeg/0.11.0/ffmpeg.min.js" integrity="sha512-Is8S8ThYI7id9w6G6y24z0u8f/pZlY8CdBm4fMvO4P7at1pSvn96YvAsas8UolNclnZgZbslS08DshU1CnbBcg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.11.0/dist/ffmpeg.min.js"></script>
 
 <script>
     let ffmpeg = null;
@@ -212,16 +212,16 @@
         addLog('正從 CDN 安全管道拉取核心晶片...');
 
         try {
-            // 防禦性檢查，若 CDN 檔案載入被阻擋則精準提示
             if (!window.FFmpeg) {
-                throw new Error('CDN 管道發生異常，請確認您的網路環境是否阻擋了 cdnjs。');
+                throw new Error('FFmpeg 載入失敗，請確認網路或瀏覽器是否阻擋了外部指令碼。');
             }
             
             const { createFFmpeg } = window.FFmpeg;
             
+            // 統一改用 unpkg 同源路徑，避免跨網域引發安全性封鎖
             ffmpeg = createFFmpeg({ 
                 log: true,
-                corePath: 'https://cdnjs.cloudflare.com/ajax/libs/ffmpeg-core/0.11.0/ffmpeg-core.js'
+                corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
             });
 
             ffmpeg.setProgress(({ ratio }) => {
@@ -242,11 +242,12 @@
             initStatus.className = 'init-status status-error';
             initStatus.innerHTML = `❌ 核心掛載失敗: ${err.message}`;
             addLog(`初始化失敗: ${err.message}`, true);
+            addLog(`💡 提示：請確保您是在伺服器環境（如 Local Server）下執行此網頁，直接雙擊開檔會被瀏覽器安全性阻擋。`);
             return false;
         }
     }
 
-    // 🎯 背景默默整理資料夾檔案清單（完全獨立，不干涉瀏覽器使用者手勢限制）
+    // 🎯 背景默默整理資料夾檔案清單
     async function refreshFilesSilently() {
         if (!dirHandle) return;
         try {
@@ -282,7 +283,7 @@
         }
     }
 
-    // 1. 使用者親手點擊：初次對接資料夾（具備手勢合法授權）
+    // 1. 使用者親手點擊：初次對接資料夾
     btnDir.addEventListener('click', async () => {
         try {
             dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
@@ -345,8 +346,6 @@
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
-            // 🎯【極輕量轉碼參數】
-            // 移除了 -threads 以防 WASM 內存崩潰，調整為 ultrafast 與 crf 26，防止 0 字节檔案生成。
             await ffmpeg.run(
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
@@ -391,7 +390,6 @@
             btnDir.disabled = false;
             fileSelect.disabled = false;
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            // 安全背景默默刷新，不假造點擊，完美規避手勢禁令
             await refreshFilesSilently(); 
         }
     });
