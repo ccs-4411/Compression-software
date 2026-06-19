@@ -203,7 +203,7 @@
         statusDiv.textContent = message;
     }
 
-    // 🎯【核心突破口】點擊時才動態載入核心，且完全免疫跨網域 Worker 限制
+    // 🎯 核心啟動：安全載入 31MB 全球核心
     async function ensureFFmpegReady() {
         if (ffmpegReady && ffmpeg) return true; 
 
@@ -212,14 +212,12 @@
         addLog('正從 jsDelivr CDN 安全管道拉取核心晶片...');
 
         try {
-            // 0.11.0 版本的全域提取類別是 window.FFmpeg
             if (!window.FFmpeg) {
                 throw new Error('找不到 window.FFmpeg 模組，請確認網路是否被阻擋。');
             }
             
             const { createFFmpeg } = window.FFmpeg;
             
-            // 🎯 這裡加上 log: true 可以在 Console 看到細節
             ffmpeg = createFFmpeg({ 
                 log: true,
                 corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
@@ -227,13 +225,11 @@
 
             ffmpeg.setProgress(({ ratio }) => {
                 const percent = Math.round(ratio * 100);
-                // 處理可能超過 100 或負數的極端狀況
                 const safePercent = Math.max(0, Math.min(100, percent));
                 progressFill.style.width = safePercent + '%';
                 updateStatus(`🎬 影片壓縮中... ${safePercent}%`, 'info');
             });
 
-            // 🎯 正式載入 31MB 核心，此版核心架構在載入時會自動穿透沙盒限制
             await ffmpeg.load();
             
             ffmpegReady = true;
@@ -249,13 +245,10 @@
         }
     }
 
-    // 1. 本地目錄直接讀取
-    btnDir.addEventListener('click', async () => {
+    // 🎯【獨立抽取：安全刷新邏輯】不需要點擊手勢，直接背景重讀資料夾控制權
+    async function refreshFilesSilently() {
+        if (!dirHandle) return;
         try {
-            dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            dirPathSpan.innerText = `📁 已對接目錄: ${dirHandle.name}`;
-            addLog(`已成功開啟本地目錄: ${dirHandle.name}`);
-
             fileSelect.innerHTML = '<option value="">-- 請選擇影片檔案 --</option>';
             fileHandles.clear();
 
@@ -278,11 +271,26 @@
                 fileSelect.disabled = false;
                 btnStart.disabled = false; 
                 btnStart.innerText = '開始壓縮並寫入資料夾';
-                updateStatus(`📁 成功對接，目錄下發現 ${fileHandles.size} 個支援的 MP4 檔案`, 'success');
             } else {
                 updateStatus('⚠️ 該目錄下沒有找到標準 MP4 影片檔案', 'error');
                 btnStart.disabled = true;
                 btnStart.innerText = '請先選取影片檔案';
+            }
+        } catch (e) {
+            console.error("背景刷新失敗:", e);
+        }
+    }
+
+    // 1. 使用者親手點擊：初次對接資料夾（此處有手勢，完全合法）
+    btnDir.addEventListener('click', async () => {
+        try {
+            dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            dirPathSpan.innerText = `📁 已對接目錄: ${dirHandle.name}`;
+            addLog(`已成功開啟本地目錄: ${dirHandle.name}`);
+
+            await refreshFilesSilently();
+            if (fileHandles.size > 0) {
+                updateStatus(`📁 成功對接，目錄下發現 ${fileHandles.size} 個支援的 MP4 檔案`, 'success');
             }
         } catch (err) {
             if (err.name !== 'AbortError') updateStatus(`對接資料夾失敗: ${err.message}`, 'error');
@@ -322,11 +330,9 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            // 0.11.0 版本的內建高效 fetchFile 讀取工具
             const { fetchFile } = window.FFmpeg;
             const videoData = await fetchFile(file);
             
-            // 寫入虛擬文件系統 (0.11.0 版語法為 FS('writeFile', ...))
             ffmpeg.FS('writeFile', 'input_large.mp4', videoData);
             
             addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
@@ -335,7 +341,6 @@
             const blackBoxFilter = `scale=${targetWidth}:${targetHeight}:force_original_aspect_ratio=decrease,pad=${targetWidth}:${targetHeight}:(ow-iw)/2:(oh-ih)/2:black`;
             const outName = `AI_${fileName}`;
 
-            // 執行 FFmpeg 指令 (0.11.0 版語法為 ffmpeg.run(...))
             await ffmpeg.run(
                 '-i', 'input_large.mp4',
                 '-vf', blackBoxFilter,
@@ -350,7 +355,6 @@
             addLog('影片壓縮重編碼順利完成！正在同步至原本地資料夾...');
             updateStatus('💾 正在將成品同步寫回本地目錄，請勿關閉網頁...');
 
-            // 讀取虛擬文件系統成品
             const resultData = ffmpeg.FS('readFile', 'output_compressed.mp4');
             
             if (!resultData || resultData.length === 0) {
@@ -365,7 +369,6 @@
             updateStatus(`🎉 成功！檔案已存至原資料夾：${outName}`, 'success');
             addLog(`大檔案無損壓縮成功 -> 生成 ${outName}`);
 
-            // 釋放內存
             ffmpeg.FS('unlink', 'input_large.mp4');
             ffmpeg.FS('unlink', 'output_compressed.mp4');
 
@@ -377,7 +380,8 @@
             btnDir.disabled = false;
             fileSelect.disabled = false;
             btnStart.innerText = '開始壓縮並寫入資料夾';
-            try { btnDir.click(); } catch(e){}
+            // 🎯【核心修正】移除偽造點擊，改用無感背景自動刷新，完美避開瀏覽器禁令！
+            await refreshFilesSilently(); 
         }
     });
 </script>
