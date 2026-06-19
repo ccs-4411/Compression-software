@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/coi-serviceworker/0.1.7/coi-serviceworker.min.js"></script>
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 影片本地壓縮工具 (免安全設定相容版)</title>
+    <title>AI 影片本地壓縮工具 (多執行緒高速網頁版)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -76,18 +78,15 @@
         </select>
     </div>
 
-    <button id="btnStart" disabled>載入元件中，請稍候...</button>
-    <div id="log">系統正在初始化...</div>
+    <button id="btnStart" disabled>載入多執行緒核心中...</button>
+    <div id="log">正在透過安全代理初始化系統...</div>
 </div>
 
 <script>
     const { createFFmpeg, fetchFile } = FFmpeg;
     
-    // 關鍵修正：強迫指定載入不依賴 SharedArrayBuffer 的單執行緒核心 (Single-Thread)
-    const ffmpeg = createFFmpeg({ 
-        log: false,
-        corePath: 'https://unpkg.com/@ffmpeg/core-st@0.11.1/dist/ffmpeg-core.js'
-    });
+    // 這裡回歸官方預設的多執行緒核心，效能最快、最穩定
+    const ffmpeg = createFFmpeg({ log: false }); 
 
     let dirHandle = null;
     const fileHandles = new Map();
@@ -105,19 +104,29 @@
         logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    // 初始化：載入單執行緒 FFmpeg 核心
+    // 初始化並載入核心
     async function initFFmpeg() {
         try {
-            log('正在下載相容版影片壓縮核心 (免安全設定)...', 'info');
+            log('正在安全隔離區內下載多執行緒影片轉碼核心...', 'info');
             await ffmpeg.load();
-            log('影片壓縮核心載入成功！系統就緒。', 'success');
+            log('🎉 多執行緒影片核心載入成功！系統已就緒。', 'success');
             btnStart.innerText = '開始壓縮並存檔';
-            btnStart.disabled = true; // 有選檔案才能點
+            btnStart.disabled = true;
         } catch (err) {
-            log(`核心載入失敗: ${err.message}`, 'error');
+            log(`核心初始化失敗: ${err.message}`, 'error');
+            log(`提示: 如果是第一次開啟，請重整網頁或改用無痕視窗開啟。`, 'info');
         }
     }
-    initFFmpeg();
+    
+    // 監聽轉碼百分比進度
+    ffmpeg.setProgress(({ ratio }) => {
+        if (ratio >= 0 && ratio <= 1) {
+            btnStart.innerText = `壓縮中... ${Math.round(ratio * 100)}%`;
+        }
+    });
+
+    // 延遲載入，確保解鎖指令先在瀏覽器生效
+    setTimeout(initFFmpeg, 1000);
 
     // 1. 選取本地資料夾
     btnDir.addEventListener('click', async () => {
@@ -147,7 +156,7 @@
             if (fileHandles.size > 0) {
                 fileSelect.disabled = false;
                 btnStart.disabled = false;
-                log(`找到 ${fileHandles.size} 個 MP4 影片檔案。`, 'info');
+                log(`找到 ${fileHandles.size} 個 MP4 影片。`, 'info');
             } else {
                 log('該資料夾內沒有找到支援的 .mp4 檔案。', 'error');
             }
@@ -159,26 +168,21 @@
     // 2. 開始壓縮影片
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
-        if (!fileName) {
-            log('請先選擇一個影片檔案！', 'error');
-            return;
-        }
+        if (!fileName) return;
 
         const targetSize = resolutionSelect.value;
         btnStart.disabled = true;
         btnDir.disabled = true;
         fileSelect.disabled = true;
-        btnStart.innerText = '正在壓縮中...';
 
         try {
-            log(`正在讀取影片原始資料: ${fileName}...`, 'info');
+            log(`正在提取影片二進位資料: ${fileName}...`, 'info');
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
             ffmpeg.FS('writeFile', fileName, await fetchFile(file));
             
-            log(`影片載入完畢。開始調整解析度為 ${targetSize}p...`, 'process');
-            log(`提示：單核心壓縮時間較長，期間網頁可能無回應，請放著讓它跑完。`, 'info');
+            log(`影片讀取完成，多執行緒硬體加速壓縮啟動 (${targetSize}p)...`, 'process');
 
             const scaleFilter = `scale='if(gt(iw,ih),min(${targetSize},iw),-2)':'if(gt(iw,ih),-2,min(${targetSize},ih))'`;
             const outName = `AI_${fileName}`;
@@ -188,29 +192,28 @@
                 '-i', fileName,
                 '-vf', scaleFilter,
                 '-c:v', 'libx264',
-                '-preset', 'ultrafast',
-                '-crf', '28',        // 微調壓縮率，加速轉碼並縮小體積
-                '-c:a', 'copy',      // 音訊直接複製
+                '-preset', 'ultrafast', // 用最快預設集，防止瀏覽器分頁逾時
+                '-crf', '26',
+                '-c:a', 'copy',
                 outName
             );
 
-            log(`影片處理完成！正在將新檔案寫回您的資料夾...`, 'info');
+            log(`轉碼成功！正在將檔案同步回原資料夾...`, 'info');
 
             const data = ffmpeg.FS('readFile', outName);
 
-            // 建立本地檔案並寫入
             const newFileHandle = await dirHandle.getFileHandle(outName, { create: true });
             const writable = await newFileHandle.createWritable();
             await writable.write(data);
             await writable.close();
 
-            log(`🎉 成功存檔！輸出檔名：${outName}`, 'success');
+            log(`🎉 壓縮完成並存檔成功！檔名為：${outName}`, 'success');
 
             ffmpeg.FS('unlink', fileName);
             ffmpeg.FS('unlink', outName);
 
         } catch (err) {
-            log(`影片壓縮失敗: ${err.message}`, 'error');
+            log(`影片處理失敗: ${err.message}`, 'error');
         } finally {
             btnStart.disabled = false;
             btnDir.disabled = false;
