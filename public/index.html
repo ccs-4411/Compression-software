@@ -133,7 +133,7 @@
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.15 雲端晶片隨攜版</div>
+    <div class="subtitle">⚡ 核心版本：0.12.15 雲端隨攜版</div>
     
     <div class="init-status init-idle" id="initStatus">
         💡 提示：核心尚未載入，將在點擊壓縮時自動對接。
@@ -172,7 +172,7 @@
     <div id="log"></div>
 </div>
 
-<script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.min.js"></script>
 
 <script>
     let ffmpeg = null;
@@ -203,21 +203,21 @@
         statusDiv.textContent = message;
     }
 
-    // 🎯 核心啟動函式：移到這裡，只有在點擊按鈕時才會被觸發
+    // 🎯 核心啟動：按鈕按下時才進行 31MB 大檔案的加載
     async function ensureFFmpegReady() {
-        if (ffmpegReady && ffmpeg) return true; // 已經加載過就不用重抓
+        if (ffmpegReady && ffmpeg) return true; 
 
         initStatus.className = 'init-status init-loading';
         initStatus.innerHTML = '⚙️ 正在即時下載並掛載 31MB 全球通用安全核心... (僅首次需下載)';
-        addLog('正從 CDN 管道拉取 FFmpeg WASM 晶片...');
+        addLog('正從 jsDelivr CDN 管道拉取 FFmpeg WASM 晶片...');
 
         try {
-            let FFmpegModule = window.FFmpegWASM || window.FFmpeg;
-            if (!FFmpegModule || !FFmpegModule.FFmpeg) {
-                throw new Error('找不到 FFmpeg 模組，請確認網路連線是否正常。');
+            // 精準提取新版全域物件 window.FFmpeg.FFmpeg
+            if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
+                throw new Error('找不到 window.FFmpeg.FFmpeg 模組，請檢查網路是否被阻擋。');
             }
             
-            const FFmpegClass = FFmpegModule.FFmpeg;
+            const FFmpegClass = window.FFmpeg.FFmpeg;
             ffmpeg = new FFmpegClass();
             
             ffmpeg.on('log', ({ message }) => {
@@ -232,10 +232,10 @@
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            // 🎯 【動態下載】只有此時才會真正發起 31MB 的下載請求
+            // 只有點擊時，瀏覽器才發起這兩個大檔案的請求
             await ffmpeg.load({
-                corePath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-                wasmPath: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
+                corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+                wasmPath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
             });
             
             ffmpegReady = true;
@@ -278,7 +278,7 @@
 
             if (fileHandles.size > 0) {
                 fileSelect.disabled = false;
-                btnStart.disabled = false; // 💡 只要有檔案，按鈕就直接亮起
+                btnStart.disabled = false; 
                 btnStart.innerText = '開始壓縮並寫入資料夾';
                 updateStatus(`📁 成功對接，目錄下發現 ${fileHandles.size} 個支援的 MP4 檔案`, 'success');
             } else {
@@ -291,7 +291,7 @@
         }
     });
 
-    // 2. 點擊按鈕：先檢查並加載核心，再執行轉碼
+    // 2. 轉碼執行核心
     btnStart.addEventListener('click', async () => {
         const fileName = fileSelect.value;
         if (!fileName) return;
@@ -300,10 +300,9 @@
         btnDir.disabled = true;
         fileSelect.disabled = true;
 
-        // 🎯 關鍵攔截點：在這裡才去抓 31MB 的核心檔案
+        // 🚀 攔截：確保按鈕點擊後核心順利下載並初始化
         const isReady = await ensureFFmpegReady();
         if (!isReady) {
-            // 如果加載核心失敗，把按鈕還給使用者重新試
             btnStart.disabled = false;
             btnDir.disabled = false;
             fileSelect.disabled = false;
