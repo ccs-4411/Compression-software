@@ -128,15 +128,18 @@
         .init-loading { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; color: #fcd34d; }
         .init-ready { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981; }
     </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.2/dist/umd/index.min.js"></script>
 </head>
 <body>
 
 <div class="container">
     <h1>🎬 AI 影片本地壓縮工具</h1>
-    <div class="subtitle">⚡ 核心版本：0.12.15 雲端隨攜版</div>
+    <div class="subtitle">⚡ 核心版本：0.12.15 雲端防護版</div>
     
     <div class="init-status init-idle" id="initStatus">
-        💡 提示：核心尚未載入，將在點擊壓縮時自動對接。
+        💡 提示：核心模組已就緒，將在點擊壓縮時正式啟用 31MB 轉碼晶片。
     </div>
     
     <div class="form-group">
@@ -172,8 +175,6 @@
     <div id="log"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.min.js"></script>
-
 <script>
     let ffmpeg = null;
     let ffmpegReady = false;
@@ -203,7 +204,7 @@
         statusDiv.textContent = message;
     }
 
-    // 🎯 核心啟動：按鈕按下時才進行 31MB 大檔案的加載
+    // 🎯【關鍵修正二】安全、多元的物件相容提取法
     async function ensureFFmpegReady() {
         if (ffmpegReady && ffmpeg) return true; 
 
@@ -212,12 +213,16 @@
         addLog('正從 jsDelivr CDN 管道拉取 FFmpeg WASM 晶片...');
 
         try {
-            // 精準提取新版全域物件 window.FFmpeg.FFmpeg
-            if (!window.FFmpeg || !window.FFmpeg.FFmpeg) {
-                throw new Error('找不到 window.FFmpeg.FFmpeg 模組，請檢查網路是否被阻擋。');
+            // 雙向阻斷排查法：嘗試所有可能的 CDN 命名空間變體
+            let FFmpegLib = window.FFmpeg;
+            if (!FFmpegLib && window.FFmpegWASM) FFmpegLib = window.FFmpegWASM;
+            
+            if (!FFmpegLib || (!FFmpegLib.FFmpeg && typeof FFmpegLib !== 'function')) {
+                throw new Error('瀏覽器阻擋了 CDN 變體宣告。請嘗試按 F12 開啟快取停用後重試。');
             }
             
-            const FFmpegClass = window.FFmpeg.FFmpeg;
+            // 建立實例
+            const FFmpegClass = FFmpegLib.FFmpeg || FFmpegLib;
             ffmpeg = new FFmpegClass();
             
             ffmpeg.on('log', ({ message }) => {
@@ -232,7 +237,7 @@
                 updateStatus(`🎬 影片壓縮中... ${percent}%`, 'info');
             });
 
-            // 只有點擊時，瀏覽器才發起這兩個大檔案的請求
+            // 🎯【核心晶片延遲載入】點擊時才下載這兩個 31MB 大檔案
             await ffmpeg.load({
                 corePath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
                 wasmPath: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
@@ -300,7 +305,6 @@
         btnDir.disabled = true;
         fileSelect.disabled = true;
 
-        // 🚀 攔截：確保按鈕點擊後核心順利下載並初始化
         const isReady = await ensureFFmpegReady();
         if (!isReady) {
             btnStart.disabled = false;
@@ -325,8 +329,12 @@
             const fileHandle = fileHandles.get(fileName);
             const file = await fileHandle.getFile();
             
-            let FFmpegModule = window.FFmpegWASM || window.FFmpeg;
-            const videoData = await FFmpegModule.fetchFile(file);
+            // 提取 fetchFile 工具方法
+            let fetchFileMethod = window.FFmpegUtils ? window.FFmpegUtils.fetchFile : null;
+            if (!fetchFileMethod && window.FFmpeg && window.FFmpeg.fetchFile) fetchFileMethod = window.FFmpeg.fetchFile;
+            if (!fetchFileMethod) throw new Error('無法取得 fetchFile 輔助函式，轉碼終止。');
+
+            const videoData = await fetchFileMethod(file);
             await ffmpeg.writeFile('input_large.mp4', videoData);
             
             addLog('檔案就緒，開始進行 16:9 黑框等比例渲染配置...');
