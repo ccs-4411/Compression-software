@@ -19,10 +19,26 @@ app.use(express.static(path.join(__dirname, 'public'), {
     }
 }));
 
-// ...前面的設定都一樣...
+const PORT = process.env.PORT || 8080;
 
-// 其餘的 app.listen 或路由保持原樣...
-const PORT = process.env.PORT || 8080; // 👈 確保預設對準 Railway 的 8080 埠
-app.listen(PORT, '0.0.0.0', () => {   // 👈 關鍵！加上了 '0.0.0.0' 允許外部網路連入
-    console.log(`伺服器正運行在 port ${PORT}`);
+// 捕捉未捕獲的異常
+process.on('uncaughtException', (err) => {
+    console.error('❌ 未捕獲的異常:', err);
+    process.exit(1);
+});
+
+// 捕捉未處理的 Promise 拒絕
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ 未處理的 Promise 拒絕:', reason);
+    process.exit(1);
+});
+
+const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ 伺服器正運行在 port ${PORT}`);
+    console.log(`✅ 時間: ${new Date().toISOString()}`);
+});
+
+server.on('error', (err) => {
+    console.error('❌ 伺服器錯誤:', err);
+    process.exit(1);
 });
